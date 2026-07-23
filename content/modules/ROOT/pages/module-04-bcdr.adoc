@@ -12,6 +12,7 @@ Red Hat Solutions Include:
 Ecosystem Partner Solutions Include:
 
 * https://www.cohesity.com/blogs/enhancing-cyber-resilience-for-red-hat-openshift-virtualization-with-cohesity/[*Cohesity DataProtect*^]
+* https://infohub.delltechnologies.com/sv-se/l/dell-powerprotect-data-manager-protecting-openshift-workloads/powerprotect-data-manager-protection-of-openshift-virtualization-vms/[*Dell PowerProtect Data Manager*^]
 * https://docs.netapp.com/us-en/trident/index.html[*NetApp Trident Protect*^]
 * https://portworx.com/blog/portworx-redhat-openshift-virtualization-and-kubevirt/[*Portworx Disaster Recovery for OpenShift Virtualization*^]
 * https://www.rubrik.com/solutions/openshift[*Rubrik for OpenShift*^]
