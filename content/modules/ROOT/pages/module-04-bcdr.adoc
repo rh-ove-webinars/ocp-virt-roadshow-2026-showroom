@@ -24,6 +24,8 @@ NOTE: This is not intended to be an exhaustive list of partners offering a suppo
 
 In this portion of the lab, we will make use of OADP to perform a virtual machine backup and restore operation.
 
+NOTE: This lab environment is powered by Intel Xeon processors.
+
 [[review_operator]]
 == Review the OADP Operator
 

@@ -19,6 +19,8 @@ If you would like to learn more about how to configure the Migration Toolkit for
 * https://docs.redhat.com/en/documentation/migration_toolkit_for_virtualization/2.11/html/planning_your_migration_to_red_hat_openshift_virtualization/assembly_provider-specific-requirements-for-migration_mtv#rhv-prerequisites_mtv[Red Hat Virtualization^]
 * https://docs.redhat.com/en/documentation/migration_toolkit_for_virtualization/2.11/html/planning_your_migration_to_red_hat_openshift_virtualization/assembly_provider-specific-requirements-for-migration_mtv#vmware-prerequisites_mtv[VMware vSphere^] 
 
+NOTE: This lab environment is powered by Intel Xeon processors.
+
 .*Goals*
 
 * Explore the VMware vSphere environment
