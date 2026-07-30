@@ -8,7 +8,7 @@ nav:
 
 asciidoc:
   attributes:
-    lab_name: Experience OpenShift Virtualization
+    lab_name: Experience OpenShift Virtualization — Running on Intel
     release-version: master
     page-pagination: true
   page-links:
