@@ -120,6 +120,8 @@ For access, please use the following credentials:
 
 === Platform Information
 
+image::intel-logo.svg[Intel,120,link=self]
+
 This lab environment runs on Intel Xeon processors, demonstrating that OpenShift Virtualization delivers the same enterprise-grade VM management on Intel hardware that organizations rely on in production.
 
 === Version Information

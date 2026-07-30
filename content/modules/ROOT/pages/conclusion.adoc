@@ -6,6 +6,8 @@ We hope you have enjoyed {lab_name} and learning more about *OpenShift Virtualiz
 
 Everything you experienced in this lab ran on *Intel Xeon processors* — the same hardware powering enterprise data centers worldwide.
 
+image::intel-logo.svg[Intel,100,link=self]
+
 [key_takeaways]
 == Key Takeaways
 
