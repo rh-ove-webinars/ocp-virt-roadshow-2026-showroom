@@ -57,6 +57,20 @@ NOTE: You will not need to migrate the HAproxy (load balancer) VM because OpenSh
 
 === Review the VMware environment
 
+++++
+<iframe
+  src="https://demo.arcade.software/lmVpLJxDaTpk5G8vKoX1?embed&embed_mobile=tab&embed_desktop=inline&show_copy_link=true"
+  width="100%"
+  height="600px"
+  frameborder="0"
+  webkitallowfullscreen
+  mozallowfullscreen
+  allowfullscreen
+>
+</iframe>
+++++
+
+////
 To help understand the process of mapping resources, such as datastores and port groups, from vSphere into OpenShift's equivalents, storage classes and network attachment definitions, let's begin by reviewing the source environment for the migrations.
 
 . Navigate to VMware vCenter: https://{vcenter_console}[vCenter Console^]
@@ -86,7 +100,7 @@ image::2026_spring/module-02-mtv/03_vSphere_Network.png[link=self, window=blank,
 . Finally, review the datastores in use by browsing to the *Datastores* view. Expand the tree to see the datastores that are attached to the *RS0x* datacenter, and optionally browse to the *VMs* sub-tab to view the capacity used by each virtual machine.
 +
 image::2026_spring/module-02-mtv/04_vSphere_Datastore.png[link=self, window=blank, width=100%]
-
+////
 === Review the VMware provider to the migration toolkit
 
 Now that we have completed our review of VMware vSphere and the virtual machines that reside there, you may close the window and return to your OpenShift web console.
@@ -95,7 +109,7 @@ Now that we have completed our review of VMware vSphere and the virtual machines
 
 . Select project *mtv-{user}* at the top of the page.
 +
-image::2026_spring/module-02-mtv/06_MTV_Providers.png[link=self, window=blank, width=100%]
+image::2026_summer/module-02-mtv/06_MTV_Providers.png[link=self, window=blank, width=100%]
 
 By default, there is a provider called *host* which represents your current *OpenShift Virtualization* cluster as a target platform.
 
@@ -121,15 +135,15 @@ image::2026_spring/module-02-mtv/08_VMware_Source_Provider.png[link=self, window
 * winweb01-{user}
 * winweb02-{user}
 +
-image::2026_spring/module-02-mtv/09_VM_List.png[link=self, window=blank, width=100%]
+image::2026_summer/module-02-mtv/09_VM_List.png[link=self, window=blank, width=100%]
 
 . On the next screen you will be tasked with providing networking details for your migration plan. Select the radio button to *Use new network map*, then from the Source network dropdown select *segment-migrating-to-ocpvirt* and for the Target network dropdown select the *Default network*. Finally, fill in the Network map name with *default-network-map* and click the *Next* button.
 +
 image::2026_spring/module-02-mtv/10a_Mig_Plan_Net.png[link=self, window=blank, width=100%]
 
-. On the next screen you will be tasked with providing storage details for your migration plan. Select the radio button to *Use new storage map*, then from the Source storage dropdowns make sure that the two workload shares from the VMware vSphere environment are listed, and from the Target storage dropdowns the default storage class *ocs-external-storagecluster-ceph-rbd* are selected for both. Finally, fill in the Storage map name with *default-storage-map* and click the *Next* button.
+. On the next screen you will be tasked with providing storage details for your migration plan. Select the radio button to *Use new storage map*, then from the Source storage dropdowns make sure that the workload share from the VMware vSphere environment is listed, and from the Target storage dropdowns the default storage class *ocs-external-storagecluster-ceph-rbd* are selected for both. Finally, fill in the Storage map name with *default-storage-map* and click the *Next* button.
 +
-image::2026_spring/module-02-mtv/10b_Mig_Plan_Stor.png[link=self, window=blank, width=100%]
+image::2026_summer/module-02-mtv/10b_Mig_Plan_Stor.png[link=self, window=blank, width=100%]
 
 . The next screen will give you the option of creating a Cold or Warm migration. As the source virtual machines are powered off we will choose Cold Migration and click the *Next* button.
 +
@@ -140,11 +154,7 @@ image::2026_spring/module-02-mtv/10c_Mig_Plan_Cold.png[link=self, window=blank, 
 . You will now be on the *Review and create* page, where you can see all of the options we just selected during the migration wizard. Review that everything looks correct, and when you are ready click the *Create plan* button at the bottom.
 +
 image::2026_spring/module-02-mtv/11a_Create_Migration_Plan_Top.png[link=self, window=blank, width=100%]
-image::2026_spring/module-02-mtv/11b_Create_Migration_Plan_Bottom.png[link=self, window=blank, width=100%]
-
-. You will be taken to a new screen where you will see that the plan for migration is currently being validated, and is in an *Unknown* state.
-+
-image::2026_spring/module-02-mtv/12_Migration_Plan_Unready.png[link=self, window=blank, width=100%]
+image::2026_summer/module-02-mtv/11b_Create_Migration_Plan_Bottom.png[link=self, window=blank, width=100%]
 
 . After a few moments the plan will become *Ready for Migration*, click on the blue *Start* button to begin the migration process.
 +
@@ -166,7 +176,7 @@ image::2026_spring/module-02-mtv/16_VMs_Migrating_Details.png[link=self, window=
 +
 image::2026_spring/module-02-mtv/17_VM_Migration_Stages.png[link=self, window=blank, width=100%]
 
-IMPORTANT: The migration of these machines can take quite a bit of time depending on the number of users currently participating in the lab. In a production environment it's recommended to have a dedicated 10gbps network for virtual machine migrations, which we do not have in our simulated lab environment. Please be patient as these machines migrate, and feel free to move along to the next section of interactive videos, or to the next module while awaiting the completion of the migration plan. We will work with these migrated VMs in a later module.
+IMPORTANT: The migration of these machines can take a a little bit of time depending on the number of users currently participating in the lab. In a production environment it's recommended to have a dedicated 10gbps network for virtual machine migrations, which we do not have in our simulated lab environment. Please be patient as these machines migrate, and feel free to move along to the next section of interactive videos, or to the next module while awaiting the completion of the migration plan. We will work with these migrated VMs in a later module.
 
 
 [[interactive_demos]]
