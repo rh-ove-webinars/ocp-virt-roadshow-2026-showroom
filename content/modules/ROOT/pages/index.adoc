@@ -107,6 +107,7 @@ Your login is available with:
 * *User:* {user}
 * *Password:* {password}
 
+////
 === vCenter Access
 
 In the migration chapter of the lab, you will be asked to login and examine a https://{vcenter_console}[VMware vSphere^] environment.
@@ -115,6 +116,7 @@ For access, please use the following credentials:
 
 * *vcenter_user:* {vcenter_full_user}
 * *vcenter_password:* {vcenter_password}
+////
 
 === Version Information
 
