@@ -13,6 +13,8 @@ At a high level, this is done by configuring the host networking, such as a Linu
 
 NOTE: The OpenShift environment has already been configured with a Linux Bridge on each compute node your virtual machines will connect to, thus allowing for easy connectivity with/from outside network resources.
 
+NOTE: This lab environment is powered by Intel Xeon processors.
+
 [[review]]
 == Review Environment
 

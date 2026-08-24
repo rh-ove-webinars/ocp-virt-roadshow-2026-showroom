@@ -14,6 +14,8 @@ This workshop segment will explore Persistent Volume Claims (PVCs), which are us
 
 Notably, there are no restrictions on storage protocol (e.g. NFS, iSCSI, FC, etc.) specific to OpenShift Virtualization. The only request is that the *RWX access mode* is available, as it is required to support live migration of VMs within the cluster. Otherwise, the right choice for storage is that which best meets the needs of your organization's VMs and Applications.
 
+NOTE: This lab environment is powered by Intel Xeon processors.
+
 Please observe the following graphic for a demonstration of the CSI workflow for provisioning storage in Red Hat OpenShift.
 
 image::2026_spring/module-03-storage/00_Disk_Concepts.png[link=self, window=blank, width=100%]

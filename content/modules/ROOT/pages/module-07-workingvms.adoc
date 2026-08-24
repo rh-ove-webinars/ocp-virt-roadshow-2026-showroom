@@ -4,6 +4,8 @@
 
 This section of our lab is dedicated to the Day-2 operations that many administrators would need to perform when working with virtual machines in their OpenShift Virtualization environment. We will make use of the understanding we have developed throughout this roadshow of how VMs operate in an OpenShift environment, and use those skills to complete the tasks in this section. In this particular case, we are going to work with the three virtual machines that we imported from VMware vSphere earlier in this roadshow, and we are going to make some minor configuration changes to enable the applications hosted on those servers to be accessed as they now run in OpenShift Virtualization. To accomplish this, we will expose our applications using the service/route method that is the default when making use of the OpenShift SDN pod network so that the application is reachable from outside of the cluster. Doing so provides a more modernized approach to virtual machine management by directly exposing the applications that reside on the VMs.
 
+NOTE: This lab environment is powered by Intel Xeon processors.
+
 IMPORTANT: If you have not completed the module *Migrating Existing Virtual Machines*, it is recommended that you do that module first. If you have not completed it, or if the migration process is still pending, you can complete this section by using the pre-existing virtual machines that have been staged for you for you in the *vmimported-{user}* project. Please skip to the appropriate section below based on if you are working with xref:module-07-workingvms.adoc#service_route_imported[MTV-imported VMs] or with xref:module-07-workingvms.adoc#service_route_staged[Staged VMs].
 
 

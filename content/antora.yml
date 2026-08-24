@@ -1,6 +1,6 @@
 ---
 name: modules
-title: Experience OpenShift Virtualization
+title: Experience OpenShift Virtualization — Running on Intel
 version: master
 start_page: index.adoc
 nav:
@@ -8,7 +8,7 @@ nav:
 
 asciidoc:
   attributes:
-    lab_name: Experience OpenShift Virtualization
+    lab_name: Experience OpenShift Virtualization — Running on Intel
     release-version: master
     page-pagination: true
   page-links:

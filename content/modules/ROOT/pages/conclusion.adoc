@@ -4,6 +4,10 @@ image::2025_spring/conclusion/00_Thank_You.png[link=self, window=blank, width=10
 
 We hope you have enjoyed {lab_name} and learning more about *OpenShift Virtualization* and how it can be a useful tool for both the import and management of legacy virtual machines, as well as a stepping stone on the path of application modernization.
 
+Everything you experienced in this lab ran on *Intel Xeon processors* — the same hardware powering enterprise data centers worldwide.
+
+image::intel-logo.svg[Intel,100,link=self]
+
 [key_takeaways]
 == Key Takeaways
 
@@ -14,6 +18,8 @@ We hope you have enjoyed {lab_name} and learning more about *OpenShift Virtualiz
 * OpenShift Virtualization is fully integrated with a broad ecosystem of partner products, with more coming on board each day. Check with your preferred hardware and software vendors to see if they support OpenShift Virtualization.
 
 * OpenShift Virtualization can help you set a strong foundation for traditional workloads, while building skills for the future with a modern application platform.
+
+* OpenShift Virtualization on Intel Xeon delivers proven performance for enterprise VM workloads — migration, management, and modernization on hardware you trust.
 
 
 [additional_info]

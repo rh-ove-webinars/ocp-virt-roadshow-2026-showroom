@@ -4,6 +4,8 @@
 
 The beginning section of this lab will introduce you to the basics of creating and managing VMs in OpenShift Virtualization. Starting with OpenShift 4.19 there is an entirely new UI based on patternfly 6, and a new Virtualization perspective and a tree view for virtual machines that make it easier to visualize and manage your virtualization-based assets. After exploring the UI changes, you will see how the web console guides you through the whole process of creating a virtual machine from a pre-defined template. We will then review the properties of that VM, do some basic management operations, and perform actions like live migration, that are often expected of virtual machine administrators.
 
+NOTE: This lab environment is powered by Intel Xeon processors.
+
 .*Goals*
 
 * Create a new virtual machine
