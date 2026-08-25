@@ -4,9 +4,9 @@
 == Introduction
 OpenShift Virtualization enables you to bring virtual machines onto a modern, Kubernetes-based infrastructure. It enables the development and delivery of new applications as well as the modernization of existing ones and can create applications that consist of virtual machines, containers, and serverless functions - all managed together using Kubernetes-native tools and paradigms.
 
-This roadshow event is organized to allow you to have a hands-on experience with Red Hat OpenShift Virtualization, running on Intel Xeon processors.
+This roadshow event is organized to allow you to have a hands-on experience with Red Hat OpenShift Virtualization.
 
-In this event we will explore many common management activities that virtualization administrators often encounter in their day to day workflows — all running on Intel hardware.
+In this event we will explore many common management activities that virtualization administrators often encounter in their day to day workflows.
 
 == Who Will Benefit Most from attending a Roadshow?
 
@@ -117,12 +117,6 @@ For access, please use the following credentials:
 * *vcenter_user:* {vcenter_full_user}
 * *vcenter_password:* {vcenter_password}
 ////
-
-=== Platform Information
-
-image::intel-logo.svg[Intel,120,link=self]
-
-This lab environment runs on Intel Xeon processors, demonstrating that OpenShift Virtualization delivers the same enterprise-grade VM management on Intel hardware that organizations rely on in production.
 
 === Version Information
 
