@@ -20,6 +20,8 @@ These are the *eight* main sections that will be covered:
 
 * _Virtual Machine Management_: In this section we will provide a review of virtual machine management fundamentals, including creating a virtual machine, and modifying it's allotted resources.
 
+* _Automating VMs with Ansible Automation Platform_: In this section we will see how Red Hat Ansible Automation Platform and OpenShift Virtualization work together, by building a dynamic inventory that discovers a virtual machine and running a pre-built playbook against it to demonstrate automated patch management.
+
 * _Migrating Existing Virtual Machines_: In this section, we will use the Migration Toolkit for Virtualization (MTV) to migrate virtual machines from an existing VMware vSphere environment to OpenShift Virtualization.
 
 * _Storage Management_: The storage paradigm familiar to many administrators changes with OpenShift Virtualization. This section will explore many actions related to storage management for virtual machines.
@@ -31,8 +33,6 @@ These are the *eight* main sections that will be covered:
 * _Network Management_: By default VMs are connected to the pod network in OpenShift. In this section we will explore creating new L2 network mappings as well as making use of user defined networks (UDN) for direct network connectivity.
 
 * _Working with Virtual Machines and Applications_: In this section we will perform some day-2 activities with our imported virtual machines, by exposing our VM hosted applications through services and routes.
-
-* _Automating VMs with Ansible Automation Platform_: In this section we will see how Red Hat Ansible Automation Platform and OpenShift Virtualization work together, by dynamically discovering a virtual machine and running a pre-built playbook against it to demonstrate automated patch management.
 
 
 == What is OpenShift Virtualization?

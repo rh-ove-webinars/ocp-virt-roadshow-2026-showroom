@@ -3,14 +3,18 @@
 lab_user_count: 20
 lab_user_prefix: user
 
-# Namespace the AAP/Automation Controller operator and CR are installed into.
+# Namespace the AAP operator and the unified AnsibleAutomationPlatform instance are
+# installed into. Deploying the unified platform CR (not a standalone AutomationController)
+# is what gets attendees the AAP gateway UI/login.
 aap_namespace: aap
-aap_operator_channel: stable-2.5
-aap_controller_name: controller
+aap_operator_channel: stable-2.7
+aap_platform_name: aap
 
-# Git source AAP Projects sync from for the pre-built demo playbook. Points at the
-# rh-ove-webinars org's fork (not upstream rhpds/ocp-virt-roadshow-2026-showroom) so this
-# content can be iterated on independently of the upstream repo.
+# Reference values only -- not consumed by configure-controller.yml itself (attendees enter
+# these by hand into the AAP UI in Module 8 when they build their own Project/Inventory
+# Source/Job Template). Kept here as the canonical source of truth so the lab guide and this
+# playbook can't drift apart. Points at the rh-ove-webinars org's fork (not upstream
+# rhpds/ocp-virt-roadshow-2026-showroom) so this content can be iterated on independently.
 aap_content_repo_url: "https://github.com/rh-ove-webinars/ocp-virt-roadshow-2026-showroom.git"
 aap_content_repo_branch: main
 aap_content_playbook_path: "automation/vm-content/playbooks/patch-vm.yml"

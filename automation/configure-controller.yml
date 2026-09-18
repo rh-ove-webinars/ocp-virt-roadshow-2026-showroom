@@ -1,25 +1,38 @@
 ---
-# Idempotent: configures Automation Controller for the roadshow after install-aap.yml has
-# it running. Safe to re-run any time, e.g. to refresh attendees' OAuth tokens (see
+# Idempotent: configures the AAP gateway (organizations/users/roles) and each org's two
+# Controller-side credentials, after install-aap.yml has the platform running. Safe to
+# re-run any time, e.g. to refresh attendees' OpenShift OAuth tokens (see
 # ocp_user_token_map below) shortly before the event.
 #
 #   ansible-playbook configure-controller.yml \
-#     -e controller_host=https://controller-aap.apps.<cluster-domain> \
-#     -e controller_password='<from install-aap.yml output>' \
+#     -e aap_host=https://aap-aap.apps.<cluster-domain> \
+#     -e aap_admin_password='<from install-aap.yml output>' \
 #     -e lab_password='<shared OpenShift password attendees already use>'
+#
+# Deliberately does NOT create a Project/Inventory/Job Template -- attendees build those
+# themselves in Module 8, using the "VM SSH Key" and "OpenShift Access" credentials this
+# playbook provisions. See automation/README.md and
+# content/modules/ROOT/pages/module-08-aap.adoc.
+#
+# AAP 2.5+ centralizes Organizations/Users/role-assignments in the gateway
+# (/api/gateway/v1/...), not Controller -- Controller-specific objects (credentials,
+# projects, inventories, job templates) are configured through the gateway's proxied
+# Controller API (/api/controller/v2/...), using the SAME gateway admin credentials for
+# both. See automation/README.md for how this was verified against the live cluster.
 #
 # Requires: an active `oc login` session as an admin who can read every attendee's password
 # (only needed transiently, to log in AS each attendee and mint a token for AAP -- see the
 # "Key design choice" note in the project plan for why this is done instead of ServiceAccounts).
-- name: Configure Automation Controller organizations, users and demo content
+- name: Configure AAP organizations, users and credentials
   hosts: localhost
   connection: local
   gather_facts: false
 
   vars:
-    controller_username: "{{ controller_username | default('admin') }}"
-    controller_validate_certs: false
-    controller_api: "{{ controller_host }}/api/v2"
+    aap_admin_username: admin
+    aap_validate_certs: false
+    gateway_api: "{{ aap_host }}/api/gateway/v1"
+    controller_api: "{{ aap_host }}/api/controller/v2"
     lab_users: "{{ range(1, lab_user_count + 1) | map('string') | map('regex_replace', '^(.*)$', lab_user_prefix + '\\1') | list }}"
 
   tasks:
@@ -31,13 +44,13 @@
     - name: Load connection details saved by install-aap.yml, if present and not overridden
       ansible.builtin.include_vars:
         file: "{{ playbook_dir }}/.generated/controller-connection.yml"
-      when: _saved_connection.stat.exists and (controller_host is not defined or controller_password is not defined)
+      when: _saved_connection.stat.exists and (aap_host is not defined or aap_admin_password is not defined)
 
     - name: Require required run-time variables
       ansible.builtin.assert:
         that:
-          - controller_host is defined
-          - controller_password is defined
+          - aap_host is defined
+          - aap_admin_password is defined
           - lab_password is defined
         fail_msg: >
           Missing required -e vars. See the header of this file for the exact command.
@@ -106,32 +119,42 @@
         ocp_user_token_map: "{{ dict(lab_users | zip(ocp_user_tokens.results | map(attribute='stdout'))) }}"
       no_log: true
 
-    # --- Credential type ids (looked up once, reused for all 20 orgs) -------------------
+    # --- Gateway-level lookups (looked up once, reused for all 20 orgs) -----------------
+    - name: Look up the gateway's "Organization Admin" role definition id
+      ansible.builtin.uri:
+        url: "{{ gateway_api }}/role_definitions/?name={{ 'Organization Admin' | urlencode }}"
+        url_username: "{{ aap_admin_username }}"
+        url_password: "{{ aap_admin_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ aap_validate_certs }}"
+      register: org_admin_role
+
     - name: Look up the built-in "Machine" credential type id
       ansible.builtin.uri:
         url: "{{ controller_api }}/credential_types/?name=Machine"
-        url_username: "{{ controller_username }}"
-        url_password: "{{ controller_password }}"
+        url_username: "{{ aap_admin_username }}"
+        url_password: "{{ aap_admin_password }}"
         force_basic_auth: true
-        validate_certs: "{{ controller_validate_certs }}"
+        validate_certs: "{{ aap_validate_certs }}"
       register: machine_cred_type
 
     - name: Look up the built-in "OpenShift or Kubernetes API Bearer Token" credential type id
       ansible.builtin.uri:
         url: "{{ controller_api }}/credential_types/?name={{ 'OpenShift or Kubernetes API Bearer Token' | urlencode }}"
-        url_username: "{{ controller_username }}"
-        url_password: "{{ controller_password }}"
+        url_username: "{{ aap_admin_username }}"
+        url_password: "{{ aap_admin_password }}"
         force_basic_auth: true
-        validate_certs: "{{ controller_validate_certs }}"
+        validate_certs: "{{ aap_validate_certs }}"
       register: k8s_cred_type
 
-    - name: Set credential type facts
+    - name: Set shared fact ids
       ansible.builtin.set_fact:
+        org_admin_role_definition_id: "{{ org_admin_role.json.results[0].id }}"
         machine_credential_type_id: "{{ machine_cred_type.json.results[0].id }}"
         k8s_credential_type_id: "{{ k8s_cred_type.json.results[0].id }}"
 
-    # --- Per-attendee Organization / User / Credentials / Project / Inventory / JT -------
-    - name: Configure each attendee's organization and demo content
+    # --- Per-attendee Organization / User / Role / Credentials / Project / Inventory / JT -
+    - name: Configure each attendee's organization, user and credentials
       ansible.builtin.include_tasks: tasks/configure_user.yml
       loop: "{{ lab_users }}"
       loop_control:

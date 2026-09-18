@@ -1,15 +1,17 @@
 ---
-# One-time setup: install the Ansible Automation Platform Automation Controller operator
-# on the shared roadshow cluster, and stand up a standalone AutomationController instance.
+# One-time setup: install the Ansible Automation Platform operator on the shared roadshow
+# cluster, and stand up a unified AnsibleAutomationPlatform instance (gateway + Controller +
+# EDA; Hub and Lightspeed disabled -- this lab only needs orgs, credentials, inventories and
+# job templates, and the cluster is already busy hosting ODF and 20 attendees' VMs).
 #
 # Run this ONCE, before the lab, by someone with cluster-admin access:
 #   oc login <cluster-api-url> -u kubeadmin ...
 #   ansible-playbook install-aap.yml
 #
-# Only the Controller component is installed (not the full AnsibleAutomationPlatform CR
-# with Hub/EDA) -- this lab only needs orgs, credentials, inventories and job templates,
-# and the cluster is already busy hosting ODF and 20 attendees' VMs.
-- name: Install Ansible Automation Platform (Automation Controller only)
+# Deploying the unified AnsibleAutomationPlatform CR (not a standalone AutomationController)
+# is what gets attendees a proper gateway login UI at a single URL -- see automation/README.md
+# for how the gateway/controller/EDA API surfaces relate.
+- name: Install Ansible Automation Platform
   hosts: localhost
   connection: local
   gather_facts: false
@@ -54,60 +56,73 @@
             installPlanApproval: Automatic
 
     - name: Wait for the AAP operator CSV to succeed
+      # NOTE: if you ever change aap_operator_channel on an existing install, patching the
+      # Subscription's spec.channel alone does NOT reliably trigger OLM to jump to the new
+      # channel's CSV (channels aren't necessarily a single replaces-chain). Delete the
+      # Subscription + installed CSV and let this task recreate the Subscription fresh
+      # instead of just editing spec.channel in place.
       kubernetes.core.k8s_info:
         api_version: operators.coreos.com/v1alpha1
         kind: ClusterServiceVersion
         namespace: "{{ aap_namespace }}"
       register: csv_info
       until: >
-        csv_info.resources | selectattr('metadata.name', 'search', '^aap-operator')
-        | selectattr('status.phase', 'defined') | map(attribute='status.phase') | list
-        == (csv_info.resources | selectattr('metadata.name', 'search', '^aap-operator') | list | length) * ['Succeeded']
+        (csv_info.resources | selectattr('metadata.name', 'search', '^aap-operator')
+        | map(attribute='status.phase') | list) == ['Succeeded']
       retries: 60
       delay: 30
-      when: csv_info.resources | selectattr('metadata.name', 'search', '^aap-operator') | list | length > 0
 
-    - name: Create the standalone AutomationController instance
+    - name: Create the unified AnsibleAutomationPlatform instance
       kubernetes.core.k8s:
         state: present
         definition:
-          apiVersion: automationcontroller.ansible.com/v1beta1
-          kind: AutomationController
+          apiVersion: aap.ansible.com/v1alpha1
+          kind: AnsibleAutomationPlatform
           metadata:
-            name: "{{ aap_controller_name }}"
+            name: "{{ aap_platform_name }}"
             namespace: "{{ aap_namespace }}"
+            labels:
+              app.kubernetes.io/managed-by: aap-operator
+              app.kubernetes.io/name: "{{ aap_platform_name }}"
+              app.kubernetes.io/part-of: "{{ aap_platform_name }}"
           spec:
-            replicas: 1
+            controller:
+              disabled: false
+            eda:
+              disabled: false
+            hub:
+              disabled: true
+            lightspeed:
+              disabled: true
+            image_pull_policy: IfNotPresent
+            no_log: true
+            redis_mode: standalone
             route_tls_termination_mechanism: Edge
 
-    - name: Wait for the AutomationController deployment to be ready
+    - name: Wait for the AnsibleAutomationPlatform to finish reconciling
+      # status.conditions' "Successful" entry is unreliable (observed status:"False" even
+      # once fully up) -- status.URL/adminPasswordSecret only populate once the gateway,
+      # Controller and EDA are actually reconciled, so key readiness off those instead.
       kubernetes.core.k8s_info:
-        api_version: apps/v1
-        kind: Deployment
-        name: "{{ aap_controller_name }}"
+        api_version: aap.ansible.com/v1alpha1
+        kind: AnsibleAutomationPlatform
+        name: "{{ aap_platform_name }}"
         namespace: "{{ aap_namespace }}"
-      register: controller_deploy
+      register: aap_cr
       until: >
-        controller_deploy.resources | length > 0 and
-        (controller_deploy.resources[0].status.readyReplicas | default(0)) >= 1
+        aap_cr.resources | length > 0 and
+        (aap_cr.resources[0].status.URL | default('')) != '' and
+        (aap_cr.resources[0].status.adminPasswordSecret | default('')) != ''
       retries: 60
       delay: 30
 
-    - name: Look up the Controller route
-      kubernetes.core.k8s_info:
-        api_version: route.openshift.io/v1
-        kind: Route
-        name: "{{ aap_controller_name }}"
-        namespace: "{{ aap_namespace }}"
-      register: controller_route
-
-    - name: Read the generated admin password secret
+    - name: Read the generated gateway admin password secret
       kubernetes.core.k8s_info:
         api_version: v1
         kind: Secret
-        name: "{{ aap_controller_name }}-admin-password"
+        name: "{{ aap_cr.resources[0].status.adminPasswordSecret }}"
         namespace: "{{ aap_namespace }}"
-      register: controller_admin_secret
+      register: aap_admin_secret
 
     - name: Ensure the generated-secrets directory exists
       ansible.builtin.file:
@@ -121,14 +136,14 @@
         mode: "0600"
         content: |
           ---
-          controller_host: "https://{{ controller_route.resources[0].spec.host }}"
-          controller_password: "{{ controller_admin_secret.resources[0].data.password | b64decode }}"
+          aap_host: "{{ aap_cr.resources[0].status.URL }}"
+          aap_admin_password: "{{ aap_admin_secret.resources[0].data.password | b64decode }}"
       no_log: true
 
     - name: Show connection details
       ansible.builtin.debug:
         msg:
-          - "Controller URL: https://{{ controller_route.resources[0].spec.host }}"
+          - "AAP gateway URL: {{ aap_cr.resources[0].status.URL }}"
           - "Saved to .generated/controller-connection.yml -- configure-controller.yml will"
           - "load it automatically. You still need to pass lab_password yourself, e.g.:"
           - "  ansible-playbook configure-controller.yml -e lab_password='<shared OCP lab password>'"
