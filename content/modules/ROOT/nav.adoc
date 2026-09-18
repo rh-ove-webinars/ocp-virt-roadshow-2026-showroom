@@ -41,6 +41,15 @@
 ** xref:module-07-workingvms.adoc#service_route_imported[Exposing an Application with a Service/Route - MTV-Imported VMs]
 ** xref:module-07-workingvms.adoc#service_route_staged[Exposing an Application with a Service/Route - Staged VMs]
 
+* xref:module-08-aap.adoc[Automating VMs with Ansible Automation Platform]
+** xref:module-08-aap.adoc#login_aap[Log in to Ansible Automation Platform]
+** xref:module-08-aap.adoc#explore_aap[Explore Your Pre-Configured Organization]
+** xref:module-08-aap.adoc#start_vm[Make Sure fedora01 Is Running]
+** xref:module-08-aap.adoc#enable_ssh[Authorize Ansible to Manage Your VM]
+** xref:module-08-aap.adoc#discover_vm[Discover Your VM in Ansible Automation Platform]
+** xref:module-08-aap.adoc#run_playbook[Patch Your Virtual Machine]
+** xref:module-08-aap.adoc#verify[Verify the Patch]
+
 * xref:conclusion.adoc[Conclusion]
 ** xref:conclusion.adoc#key_takeaways[Key Takeaways]
 ** xref:conclusion.adoc#additional_info[Additional Information]

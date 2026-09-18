@@ -16,7 +16,7 @@ In this event we will explore many common management activities that virtualizat
 
 == What Content Is Covered In The Roadshow?
 
-These are the *seven* main sections that will be covered:
+These are the *eight* main sections that will be covered:
 
 * _Virtual Machine Management_: In this section we will provide a review of virtual machine management fundamentals, including creating a virtual machine, and modifying it's allotted resources.
 
@@ -31,6 +31,8 @@ These are the *seven* main sections that will be covered:
 * _Network Management_: By default VMs are connected to the pod network in OpenShift. In this section we will explore creating new L2 network mappings as well as making use of user defined networks (UDN) for direct network connectivity.
 
 * _Working with Virtual Machines and Applications_: In this section we will perform some day-2 activities with our imported virtual machines, by exposing our VM hosted applications through services and routes.
+
+* _Automating VMs with Ansible Automation Platform_: In this section we will see how Red Hat Ansible Automation Platform and OpenShift Virtualization work together, by dynamically discovering a virtual machine and running a pre-built playbook against it to demonstrate automated patch management.
 
 
 == What is OpenShift Virtualization?
@@ -127,5 +129,6 @@ This edition of the OpenShift Virtualization Roadshow has been developed using t
 * Red Hat OpenShift Data Foundation 4.21.2
 * Red Hat OpenShift API for Data Protection (OADP) 1.5.5
 * Red Hat Migration Toolkit for Virtual Machines 2.11.4
+* Red Hat Ansible Automation Platform (version TBD by your workshop facilitator)
 
 (Accurate as of April 27, 2026)

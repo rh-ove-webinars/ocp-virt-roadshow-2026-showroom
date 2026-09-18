@@ -1,0 +1,138 @@
+---
+# Idempotent: configures Automation Controller for the roadshow after install-aap.yml has
+# it running. Safe to re-run any time, e.g. to refresh attendees' OAuth tokens (see
+# ocp_user_token_map below) shortly before the event.
+#
+#   ansible-playbook configure-controller.yml \
+#     -e controller_host=https://controller-aap.apps.<cluster-domain> \
+#     -e controller_password='<from install-aap.yml output>' \
+#     -e lab_password='<shared OpenShift password attendees already use>'
+#
+# Requires: an active `oc login` session as an admin who can read every attendee's password
+# (only needed transiently, to log in AS each attendee and mint a token for AAP -- see the
+# "Key design choice" note in the project plan for why this is done instead of ServiceAccounts).
+- name: Configure Automation Controller organizations, users and demo content
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    controller_username: "{{ controller_username | default('admin') }}"
+    controller_validate_certs: false
+    controller_api: "{{ controller_host }}/api/v2"
+    lab_users: "{{ range(1, lab_user_count + 1) | map('string') | map('regex_replace', '^(.*)$', lab_user_prefix + '\\1') | list }}"
+
+  tasks:
+    - name: Check for connection details saved by install-aap.yml
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/.generated/controller-connection.yml"
+      register: _saved_connection
+
+    - name: Load connection details saved by install-aap.yml, if present and not overridden
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/.generated/controller-connection.yml"
+      when: _saved_connection.stat.exists and (controller_host is not defined or controller_password is not defined)
+
+    - name: Require required run-time variables
+      ansible.builtin.assert:
+        that:
+          - controller_host is defined
+          - controller_password is defined
+          - lab_password is defined
+        fail_msg: >
+          Missing required -e vars. See the header of this file for the exact command.
+
+    # --- Shared lab-wide SSH keypair, used as every org's Machine credential -------------
+    - name: Ensure the generated-secrets directory exists
+      ansible.builtin.file:
+        path: "{{ aap_ssh_keypair_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Generate the lab SSH keypair if it doesn't already exist
+      ansible.builtin.command: >
+        ssh-keygen -t ed25519 -N "" -C "aap-roadshow-lab" -f {{ aap_ssh_private_key_path }}
+      args:
+        creates: "{{ aap_ssh_private_key_path }}"
+
+    - name: Read the generated keys
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - "{{ aap_ssh_private_key_path }}"
+        - "{{ aap_ssh_public_key_path }}"
+      register: aap_ssh_keys
+      no_log: true
+
+    - name: Set key facts
+      ansible.builtin.set_fact:
+        aap_ssh_private_key: "{{ aap_ssh_keys.results[0].content | b64decode }}"
+        aap_ssh_public_key: "{{ aap_ssh_keys.results[1].content | b64decode }}"
+      no_log: true
+
+    # --- One OAuth token per attendee, from their own OpenShift identity ----------------
+    # This works even though attendees' namespaces (vmexamples-userN) don't exist yet --
+    # identity/login is independent of the namespaces that identity will later create.
+    - name: Determine the cluster API URL from the current oc context
+      ansible.builtin.command: oc whoami --show-server
+      changed_when: false
+      register: ocp_api_server
+
+    - name: Obtain each attendee's own OAuth token (isolated kubeconfigs; admin session untouched)
+      block:
+        - name: Log in as each attendee
+          ansible.builtin.command: >
+            oc login {{ ocp_api_server.stdout }} -u {{ item }} -p {{ lab_password }}
+            --kubeconfig=/tmp/aap-lab-kubeconfig-{{ item }} --insecure-skip-tls-verify=true
+          loop: "{{ lab_users }}"
+          changed_when: false
+          no_log: true
+
+        - name: Read each attendee's token
+          ansible.builtin.command: oc whoami -t --kubeconfig=/tmp/aap-lab-kubeconfig-{{ item }}
+          loop: "{{ lab_users }}"
+          changed_when: false
+          no_log: true
+          register: ocp_user_tokens
+      always:
+        - name: Remove the temporary per-attendee kubeconfigs
+          ansible.builtin.file:
+            path: "/tmp/aap-lab-kubeconfig-{{ item }}"
+            state: absent
+          loop: "{{ lab_users }}"
+
+    - name: Map attendee usernames to their OAuth tokens
+      ansible.builtin.set_fact:
+        ocp_user_token_map: "{{ dict(lab_users | zip(ocp_user_tokens.results | map(attribute='stdout'))) }}"
+      no_log: true
+
+    # --- Credential type ids (looked up once, reused for all 20 orgs) -------------------
+    - name: Look up the built-in "Machine" credential type id
+      ansible.builtin.uri:
+        url: "{{ controller_api }}/credential_types/?name=Machine"
+        url_username: "{{ controller_username }}"
+        url_password: "{{ controller_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ controller_validate_certs }}"
+      register: machine_cred_type
+
+    - name: Look up the built-in "OpenShift or Kubernetes API Bearer Token" credential type id
+      ansible.builtin.uri:
+        url: "{{ controller_api }}/credential_types/?name={{ 'OpenShift or Kubernetes API Bearer Token' | urlencode }}"
+        url_username: "{{ controller_username }}"
+        url_password: "{{ controller_password }}"
+        force_basic_auth: true
+        validate_certs: "{{ controller_validate_certs }}"
+      register: k8s_cred_type
+
+    - name: Set credential type facts
+      ansible.builtin.set_fact:
+        machine_credential_type_id: "{{ machine_cred_type.json.results[0].id }}"
+        k8s_credential_type_id: "{{ k8s_cred_type.json.results[0].id }}"
+
+    # --- Per-attendee Organization / User / Credentials / Project / Inventory / JT -------
+    - name: Configure each attendee's organization and demo content
+      ansible.builtin.include_tasks: tasks/configure_user.yml
+      loop: "{{ lab_users }}"
+      loop_control:
+        label: "{{ item }}"

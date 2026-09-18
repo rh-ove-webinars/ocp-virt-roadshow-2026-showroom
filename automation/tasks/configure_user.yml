@@ -1,0 +1,289 @@
+---
+# Included once per attendee username (available as `item`, e.g. "user7") by
+# configure-controller.yml. Idempotently ensures that attendee's Organization, User,
+# credentials, Project, Inventory, Inventory Source and Job Template all exist.
+#
+# All API calls use name-filtered GET-then-create-if-missing so this is safe to re-run.
+
+- name: "{{ item }} / find Organization"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/organizations/?name={{ item | urlencode }}"
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+  register: _org_get
+
+- name: "{{ item }} / create Organization"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/organizations/"
+    method: POST
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+    body_format: json
+    body:
+      name: "{{ item }}"
+      description: "OCP Virt Roadshow attendee organization"
+    status_code: 201
+  register: _org_create
+  when: _org_get.json.count == 0
+
+- name: "{{ item }} / set org_id"
+  ansible.builtin.set_fact:
+    org_id: "{{ _org_get.json.results[0].id if _org_get.json.count > 0 else _org_create.json.id }}"
+
+- name: "{{ item }} / find User"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/users/?username={{ item | urlencode }}"
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+  register: _user_get
+
+- name: "{{ item }} / create User"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/users/"
+    method: POST
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+    body_format: json
+    body:
+      username: "{{ item }}"
+      password: "{{ lab_password }}"
+      is_superuser: false
+    status_code: 201
+  register: _user_create
+  no_log: true
+  when: _user_get.json.count == 0
+
+- name: "{{ item }} / set user_id"
+  ansible.builtin.set_fact:
+    user_id: "{{ _user_get.json.results[0].id if _user_get.json.count > 0 else _user_create.json.id }}"
+
+- name: "{{ item }} / find the org's Admin role"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/organizations/{{ org_id }}/object_roles/"
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+  register: _org_roles
+
+- name: "{{ item }} / grant the user Admin on their organization"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/users/{{ user_id }}/roles/"
+    method: POST
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+    body_format: json
+    body:
+      id: "{{ (_org_roles.json.results | selectattr('name', 'equalto', 'Admin') | map(attribute='id') | first) }}"
+    status_code: [200, 204]
+
+- name: "{{ item }} / find SSH Machine credential"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/credentials/?name={{ 'VM SSH Key' | urlencode }}&organization={{ org_id }}"
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+  register: _ssh_cred_get
+
+- name: "{{ item }} / create SSH Machine credential"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/credentials/"
+    method: POST
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+    body_format: json
+    body:
+      name: "VM SSH Key"
+      organization: "{{ org_id }}"
+      credential_type: "{{ machine_credential_type_id }}"
+      inputs:
+        username: fedora
+        ssh_key_data: "{{ aap_ssh_private_key }}"
+    status_code: 201
+  register: _ssh_cred_create
+  no_log: true
+  when: _ssh_cred_get.json.count == 0
+
+- name: "{{ item }} / find OpenShift Bearer Token credential"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/credentials/?name={{ 'OpenShift Access' | urlencode }}&organization={{ org_id }}"
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+  register: _k8s_cred_get
+
+- name: "{{ item }} / create/update OpenShift Bearer Token credential"
+  ansible.builtin.uri:
+    url: >-
+      {{ controller_api }}/credentials/{{ _k8s_cred_get.json.results[0].id ~ '/' if _k8s_cred_get.json.count > 0 else '' }}
+    method: "{{ 'PATCH' if _k8s_cred_get.json.count > 0 else 'POST' }}"
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+    body_format: json
+    body:
+      name: "OpenShift Access"
+      organization: "{{ org_id }}"
+      credential_type: "{{ k8s_credential_type_id }}"
+      inputs:
+        host: "{{ ocp_api_server.stdout }}"
+        bearer_token: "{{ ocp_user_token_map[item] }}"
+        verify_ssl: false
+    status_code: [200, 201]
+  no_log: true
+
+- name: "{{ item }} / find Project"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/projects/?name={{ 'Roadshow Automation' | urlencode }}&organization={{ org_id }}"
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+  register: _project_get
+
+- name: "{{ item }} / create Project"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/projects/"
+    method: POST
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+    body_format: json
+    body:
+      name: "Roadshow Automation"
+      organization: "{{ org_id }}"
+      scm_type: git
+      scm_url: "{{ aap_content_repo_url }}"
+      scm_branch: "{{ aap_content_repo_branch }}"
+      scm_update_on_launch: true
+    status_code: 201
+  register: _project_create
+  # Controller automatically triggers an initial sync on creation -- no need to wait for
+  # it here, it will be long finished before attendees log in for Module 8.
+  when: _project_get.json.count == 0
+
+- name: "{{ item }} / set project_id"
+  ansible.builtin.set_fact:
+    project_id: "{{ _project_get.json.results[0].id if _project_get.json.count > 0 else _project_create.json.id }}"
+
+- name: "{{ item }} / find Inventory"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/inventories/?name={{ ('vmexamples-' ~ item) | urlencode }}&organization={{ org_id }}"
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+  register: _inv_get
+
+- name: "{{ item }} / create Inventory"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/inventories/"
+    method: POST
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+    body_format: json
+    body:
+      name: "vmexamples-{{ item }}"
+      organization: "{{ org_id }}"
+    status_code: 201
+  register: _inv_create
+  when: _inv_get.json.count == 0
+
+- name: "{{ item }} / set inventory_id"
+  ansible.builtin.set_fact:
+    inventory_id: "{{ _inv_get.json.results[0].id if _inv_get.json.count > 0 else _inv_create.json.id }}"
+
+- name: "{{ item }} / find Inventory Source"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/inventories/{{ inventory_id }}/inventory_sources/?name={{ 'OpenShift Virtualization VMs' | urlencode }}"
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+  register: _invsrc_get
+
+- name: "{{ item }} / create Inventory Source"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/inventories/{{ inventory_id }}/inventory_sources/"
+    method: POST
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+    body_format: json
+    body:
+      name: "OpenShift Virtualization VMs"
+      source: scm
+      source_project: "{{ project_id }}"
+      source_path: "{{ aap_content_inventory_path }}"
+      overwrite: true
+      update_on_launch: false
+      credentials: ["{{ (_k8s_cred_get.json.results[0].id if _k8s_cred_get.json.count > 0 else '') }}"]
+    status_code: 201
+  when: _invsrc_get.json.count == 0
+  # Deliberately NOT auto-syncing here -- clicking "Sync" and watching fedora01 appear is
+  # the "discover your VM" moment attendees walk through in Module 8.
+
+- name: "{{ item }} / find Job Template"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/job_templates/?name={{ ('Patch fedora01 - ' ~ item) | urlencode }}"
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+  register: _jt_get
+
+- name: "{{ item }} / create Job Template"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/job_templates/"
+    method: POST
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+    body_format: json
+    body:
+      name: "Patch fedora01 - {{ item }}"
+      organization: "{{ org_id }}"
+      project: "{{ project_id }}"
+      playbook: "{{ aap_content_playbook_path }}"
+      inventory: "{{ inventory_id }}"
+      ask_limit_on_launch: true
+    status_code: 201
+  register: _jt_create
+  when: _jt_get.json.count == 0
+
+- name: "{{ item }} / set job_template_id"
+  ansible.builtin.set_fact:
+    job_template_id: "{{ _jt_get.json.results[0].id if _jt_get.json.count > 0 else _jt_create.json.id }}"
+
+- name: "{{ item }} / attach SSH Machine credential to Job Template"
+  ansible.builtin.uri:
+    url: "{{ controller_api }}/job_templates/{{ job_template_id }}/credentials/"
+    method: POST
+    url_username: "{{ controller_username }}"
+    url_password: "{{ controller_password }}"
+    force_basic_auth: true
+    validate_certs: "{{ controller_validate_certs }}"
+    body_format: json
+    body:
+      id: "{{ (_ssh_cred_get.json.results[0].id if _ssh_cred_get.json.count > 0 else _ssh_cred_create.json.id) }}"
+    status_code: [200, 204]

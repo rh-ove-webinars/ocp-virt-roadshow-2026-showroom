@@ -1,0 +1,9 @@
+---
+# Convenience wrapper: runs both setup playbooks in order. See automation/README.md for the
+# required -e variables (controller_password/lab_password are still needed on the command
+# line/vault -- they are intentionally not set here).
+- name: Install Ansible Automation Platform
+  ansible.builtin.import_playbook: install-aap.yml
+
+- name: Configure Automation Controller for the roadshow
+  ansible.builtin.import_playbook: configure-controller.yml

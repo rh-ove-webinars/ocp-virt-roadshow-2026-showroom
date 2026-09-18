@@ -1,0 +1,50 @@
+---
+# Pre-built demo playbook launched from Automation Controller in Module 8 of the lab guide.
+# Deliberately simple: update packages, reboot if the kernel changed, confirm the VM comes
+# back up, and leave visible proof of the change in /etc/motd.
+- name: Patch management demo - OpenShift Virtualization VM
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Update all packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+      register: dnf_update
+
+    - name: Check whether a reboot is required
+      ansible.builtin.command: dnf needs-restarting -r
+      register: needs_restart
+      changed_when: false
+      failed_when: needs_restart.rc not in [0, 1]
+
+    - name: Reboot the VM if a newer kernel/library requires it
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+      when: needs_restart.rc == 1
+
+    - name: Wait for the VM to come back and accept connections
+      ansible.builtin.wait_for_connection:
+        delay: 10
+        timeout: 300
+      when: needs_restart.rc == 1
+
+    - name: Re-gather facts after the reboot
+      ansible.builtin.setup:
+      when: needs_restart.rc == 1
+
+    - name: Record a patch banner in /etc/motd as visible proof of the change
+      ansible.builtin.lineinfile:
+        path: /etc/motd
+        line: "Patched by Ansible Automation Platform on {{ ansible_date_time.iso8601 }} (kernel {{ ansible_kernel }})"
+        create: true
+
+    - name: Show a summary of what changed
+      ansible.builtin.debug:
+        msg:
+          - "Host: {{ inventory_hostname }}"
+          - "Packages updated: {{ dnf_update.changed }}"
+          - "Reboot performed: {{ needs_restart.rc == 1 }}"
+          - "Kernel now running: {{ ansible_kernel }}"
