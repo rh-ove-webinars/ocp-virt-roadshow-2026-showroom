@@ -9,9 +9,9 @@ aap_operator_channel: stable-2.5
 aap_controller_name: controller
 
 # Git source AAP Projects sync from for the pre-built demo playbook. Points at the
-# lab-run fork (not upstream rhpds/ocp-virt-roadshow-2026-showroom) so this content can be
-# iterated on independently of the upstream repo.
-aap_content_repo_url: "https://github.com/linusali/ocp-virt-roadshow-2026-showroom.git"
+# rh-ove-webinars org's fork (not upstream rhpds/ocp-virt-roadshow-2026-showroom) so this
+# content can be iterated on independently of the upstream repo.
+aap_content_repo_url: "https://github.com/rh-ove-webinars/ocp-virt-roadshow-2026-showroom.git"
 aap_content_repo_branch: main
 aap_content_playbook_path: "automation/vm-content/playbooks/patch-vm.yml"
 aap_content_inventory_path: "automation/vm-content/inventory/vms.kubernetes.yml"
