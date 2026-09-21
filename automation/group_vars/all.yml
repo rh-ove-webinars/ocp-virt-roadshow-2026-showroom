@@ -18,7 +18,6 @@ aap_platform_name: aap
 aap_content_repo_url: "https://github.com/rh-ove-webinars/ocp-virt-roadshow-2026-showroom.git"
 aap_content_repo_branch: main
 aap_content_playbook_path: "automation/vm-content/playbooks/patch-vm.yml"
-aap_content_inventory_path: "automation/vm-content/inventory/vms.kubernetes.yml"
 
 # Shared SSH keypair used for every org's Machine credential. Generated once by
 # configure-controller.yml if it doesn't already exist, and gitignored -- never commit
