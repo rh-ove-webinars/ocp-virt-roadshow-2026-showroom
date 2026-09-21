@@ -1,7 +1,5 @@
 = Automating VMs with Ansible Automation Platform
 
-// Screenshots: capture each commented-out image:: line below as 2026_summer/module-08-aap/<name>.png
-// (same naming convention as the other modules), then remove the leading // to enable it.
 // The playbook shown in the "Take a Look at the Playbook" section is a copy of
 // automation/vm-content/playbooks/patch-vm.yml -- if you change one, change the other.
 
@@ -126,9 +124,9 @@ image::2026_summer/module-08-aap/10_virt_Create_VM_customization_cloud_init.png[
 
 . Click the *Create VirtualMachine* button at the bottom of the page. Leave the *Start this VirtualMachine after creation* checkbox selected, so that the virtual machine starts to boot right away.
 
-. Continue with the next section while the virtual machine boots. By the time we synchronize the inventory later in this module, the *Status* of *ansible-demo* should show as *Running*.
+. The console opens the *Overview* page of the new virtual machine. Continue with the next section while it boots. By the time we synchronize the inventory later in this module, the *Status* shown here should be *Running*.
 +
-//image::2026_summer/module-08-aap/24_VM_Running.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/24_VM_Running.png[link=self, window=blank, width=100%]
 
 [[create_project]]
 == Create a Project in AAP
@@ -309,11 +307,11 @@ image::2026_summer/module-08-aap/22_AAP_Templates.png[link=self, window=blank, w
 +
 image::2026_summer/module-08-aap/23_AAP_Templates_Job_Launch.png[link=self, window=blank, width=100%]
 
-. You will be taken to the output of the running job, where you can follow the playbook task by task. Wait until the job finishes with a status of *Successful*.
+. You will be taken to the output of the running job, where you can follow the playbook task by task. Wait until the job finishes with a status of *Success*. At the bottom of the output, the *PLAY RECAP* should show *unreachable=0* and *failed=0* for your virtual machine.
 +
 NOTE: This will take about six minutes. A newly created virtual machine has many updates waiting, and the playbook then reboots it, so the output will appear to stop on the *Reboot the VM* task while the virtual machine restarts. This is expected.
 +
-//image::2026_summer/module-08-aap/25_Job_Output.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/25_Job_Output.png[link=self, window=blank, width=100%]
 
 [[verify]]
 == Verify the Patch
@@ -322,7 +320,7 @@ Now let's confirm that the change was actually made on the virtual machine.
 
 . In the OpenShift console, click on the *ansible-demo* virtual machine, then the *Console* tab, and use the *Guest login credentials* that are provided, along with the *Copy* and *Paste to console* buttons, to log in as the *fedora* user.
 +
-//image::2026_summer/module-08-aap/26_VM_Console.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/26_VM_Console.png[link=self, window=blank, width=100%]
 
 . Run the following command to display the banner that the playbook left behind:
 +
@@ -331,14 +329,14 @@ Now let's confirm that the change was actually made on the virtual machine.
 cat /etc/motd
 ----
 +
-You should see a line similar to the following:
+The banner is also displayed automatically when you log in, because the contents of `/etc/motd` are shown at every login. You should see a line similar to the following:
 +
 [source,text]
 ----
-Patched by Ansible Automation Platform on 2026-09-21T08:57:34Z (kernel 7.2.5-200.fc44.x86_64)
+Patched by Ansible Automation Platform on 2026-09-21T13:53:48Z (kernel 7.2.5-200.fc44.x86_64)
 ----
 +
-//image::2026_summer/module-08-aap/27_Motd.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/27_Motd.png[link=self, window=blank, width=100%]
 
 . Hit *Ctrl-D* twice to log out of the virtual machine.
 
@@ -353,8 +351,6 @@ To save resources for the next lab, please stop the virtual machine that you cre
 . Select the *ansible-demo* virtual machine in the center tree column, and select the *Stop* button or option from the *Actions* dropdown menu.
 
 Now the *ansible-demo* virtual machine should be in *Stopped* state.
-
-//image::2026_summer/module-08-aap/28_VM_Stopped.png[link=self, window=blank, width=100%]
 
 == Summary
 
