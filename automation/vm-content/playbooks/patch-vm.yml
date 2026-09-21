@@ -9,10 +9,11 @@
   gather_facts: true
 
   vars:
-    # Without pipelining Ansible forces a terminal for every sudo task, and recent Fedora
-    # announces sudo sessions on a terminal with escape sequences, which show up as
-    # "junk after the JSON data" warnings on every task.
-    ansible_ssh_pipelining: true
+    # Ansible forces a terminal for every sudo task, and recent Fedora announces sudo sessions
+    # on a terminal with escape sequences, which show up as "junk after the JSON data"
+    # warnings on every task. Don't allocate one. (Pipelining also avoids the terminal, but
+    # then lineinfile has to create its own temp directory and warns about that instead.)
+    ansible_ssh_use_tty: false
 
   tasks:
     - name: Update all packages
@@ -45,6 +46,7 @@
     - name: Record a patch banner in /etc/motd as visible proof of the change
       ansible.builtin.lineinfile:
         path: /etc/motd
+        regexp: '^Patched by Ansible Automation Platform'
         line: "Patched by Ansible Automation Platform on {{ ansible_date_time.iso8601 }} (kernel {{ ansible_kernel }})"
         create: true
 

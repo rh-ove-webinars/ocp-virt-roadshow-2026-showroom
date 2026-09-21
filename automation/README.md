@@ -111,18 +111,30 @@ Module 8, referencing these two credentials by name.
   their own project with `namespaces: [vmexamples-userN]` in the source variables, otherwise it
   also discovers the stopped, pre-staged VMs in `vmimported-userN`. This was only caught by
   running the whole attendee flow end to end against a live cluster.
-- **"Module invocation had junk after the JSON data" on every task.** Harmless, but noisy in
-  the job output attendees read. The "junk" is an invisible OSC 3008 terminal escape
-  sequence (`ESC ] 3008 ; end=<id> ESC \\`). Cause: Ansible's SSH plugin forces a terminal
-  (`-tt`) for every `become` task unless it is pipelining, and on Fedora 44 (systemd 259)
-  `pam_systemd` -- pulled into `sudo`'s session via `system-auth` -- announces a session on a
-  terminal with those sequences; the closing one arrives after the module's JSON. It is not
-  the shell profile and there is no documented off-switch. Fix: `ansible_ssh_pipelining: true`
-  as a play variable in `vm-content/playbooks/patch-vm.yml` (`ansible_ssh_use_tty: false` also
-  works). Reproduced with plain Ansible against the VM and in AAP's execution environment
-  (5 warnings on a small test play before, 0 after). AAP rejects this variable as an *ad-hoc*
-  extra var, so it has to live in the playbook. Any future playbook run with `become` against
-  Fedora 44+ guests will hit this again unless it sets the same variable.
+- **Warnings in the patch job's output, and why `ansible_ssh_use_tty: false`.** Two different
+  warnings are tangled together here; the playbook avoids both.
+  1. *"Module invocation had junk after the JSON data"* on every task. The "junk" is an
+     invisible OSC 3008 terminal escape sequence (`ESC ] 3008 ; end=<id> ESC \\`). Ansible's
+     SSH plugin forces a terminal (`-tt`) for every `become` task, and on Fedora 44 (systemd
+     259) `pam_systemd` -- pulled into `sudo`'s session via `system-auth` -- announces a session
+     on a terminal with those sequences; the closing one arrives after the module's JSON. It is
+     not the shell profile and has no documented off-switch. Setting `ansible_ssh_use_tty:
+     false` as a play variable stops the terminal being allocated.
+  2. *"Module remote_tmp /root/.ansible/tmp did not exist and was created"* under the
+     `/etc/motd` task. This is what you get if you fix (1) with `ansible_ssh_pipelining: true`
+     instead: pipelining also avoids the terminal, but then Ansible no longer creates a temp
+     directory for the task, so `lineinfile` has to create its own and warns about it. That was
+     this playbook's first fix; it traded one warning for another.
+  Verified in AAP's execution environment against a freshly created VM (no
+  `/root/.ansible/tmp`): pipelining -> 0 junk, 1 remote_tmp; `use_tty: false` -> 0 and 0.
+  **Test this kind of thing in the execution environment, not with a local Ansible:** the same
+  pipelined playbook run with a local ansible-core 2.14 did *not* show the remote_tmp warning
+  at all, and running `lineinfile` in check mode never reaches the code that warns. AAP also
+  rejects both variables as *ad-hoc* extra vars, so they have to live in the playbook. Any
+  future `become` playbook run against Fedora 44+ guests needs the same variable.
+- **The `/etc/motd` task replaces its own line** (`lineinfile` with a `regexp`) instead of
+  appending, so re-running the job updates one banner rather than accumulating a new
+  timestamped line each time. Verified: two consecutive runs left exactly one line.
 - **A `uri` module quirk that cost real debugging time:** a Jinja-templated integer nested
   inside a `body:` dict on an `ansible.builtin.uri` task gets re-stringified before being
   JSON-encoded (confirmed with `-vvv`; `| int` does not survive it). Most Controller API
