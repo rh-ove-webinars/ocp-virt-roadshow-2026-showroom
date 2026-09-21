@@ -1,7 +1,7 @@
 # AAP setup automation (instructor-run, not part of the lab guide)
 
-Installs a unified Ansible Automation Platform instance (gateway + Controller + EDA; Hub and
-Lightspeed disabled) on the roadshow cluster and provisions one Organization + one local User
+Installs a unified Ansible Automation Platform instance (gateway + Controller only; EDA, Hub
+and Lightspeed disabled) on the roadshow cluster and provisions one Organization + one local User
 per attendee (`user1`..`user20`), plus the two Credentials each org needs ("VM SSH Key" and
 "OpenShift Access") for Module 8 of the lab guide
 (`content/modules/ROOT/pages/module-08-aap.adoc`). Attendees build the Project, Inventory and
@@ -32,8 +32,8 @@ deadlock, wire in the two new Antora attributes Module 8 needs) -- see step 3 be
 ## Run it
 
 ```console
-# 1. Install AAP (gateway + Controller + EDA; Hub/Lightspeed disabled to keep the footprint
-#    small on a cluster that's also running ODF and 20 attendees' VMs). Takes ~10-15 minutes.
+# 1. Install AAP (gateway + Controller only; EDA/Hub/Lightspeed disabled to keep the
+#    footprint small on a cluster that's also running ODF and 20 attendees' VMs).
 ansible-playbook install-aap.yml
 
 # --- attach a subscription in the AAP UI here (see Prerequisites) before continuing ---

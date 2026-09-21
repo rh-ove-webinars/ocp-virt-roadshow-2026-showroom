@@ -1,8 +1,9 @@
 ---
 # One-time setup: install the Ansible Automation Platform operator on the shared roadshow
-# cluster, and stand up a unified AnsibleAutomationPlatform instance (gateway + Controller +
-# EDA; Hub and Lightspeed disabled -- this lab only needs orgs, credentials, inventories and
-# job templates, and the cluster is already busy hosting ODF and 20 attendees' VMs).
+# cluster, and stand up a unified AnsibleAutomationPlatform instance (gateway + Controller
+# only; EDA, Hub and Lightspeed disabled -- this lab only needs orgs, credentials,
+# inventories and job templates, and the cluster is already busy hosting ODF and 20
+# attendees' VMs).
 #
 # Run this ONCE, before the lab, by someone with cluster-admin access:
 #   oc login <cluster-api-url> -u kubeadmin ...
@@ -10,7 +11,7 @@
 #
 # Deploying the unified AnsibleAutomationPlatform CR (not a standalone AutomationController)
 # is what gets attendees a proper gateway login UI at a single URL -- see automation/README.md
-# for how the gateway/controller/EDA API surfaces relate.
+# for how the gateway/controller API surfaces relate.
 - name: Install Ansible Automation Platform
   hosts: localhost
   connection: local
@@ -89,7 +90,7 @@
             controller:
               disabled: false
             eda:
-              disabled: false
+              disabled: true
             hub:
               disabled: true
             lightspeed:
@@ -101,8 +102,8 @@
 
     - name: Wait for the AnsibleAutomationPlatform to finish reconciling
       # status.conditions' "Successful" entry is unreliable (observed status:"False" even
-      # once fully up) -- status.URL/adminPasswordSecret only populate once the gateway,
-      # Controller and EDA are actually reconciled, so key readiness off those instead.
+      # once fully up) -- status.URL/adminPasswordSecret only populate once the gateway and
+      # Controller are actually reconciled, so key readiness off those instead.
       kubernetes.core.k8s_info:
         api_version: aap.ansible.com/v1alpha1
         kind: AnsibleAutomationPlatform
