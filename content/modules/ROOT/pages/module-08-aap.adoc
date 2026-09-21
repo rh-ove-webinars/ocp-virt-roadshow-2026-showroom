@@ -76,7 +76,7 @@ We need a virtual machine for Ansible to manage. This time, instead of a quick-c
 
 . Choose *Configure via: Script*, and replace the contents with the following, which authorizes the AAP-managed SSH key for the default *fedora* user on first boot:
 +
-[source,yaml,role=execute]
+[source,yaml,role=execute,subs="attributes+"]
 ----
 userData: |-
   #cloud-config
