@@ -34,13 +34,13 @@ Your login is the same as for the OpenShift console:
 [[login_aap]]
 == Log in to Ansible Automation Platform
 
-. Open the {aap_console_url}[Ansible Automation Platform console^] and log in with the *User* and *Password* shown above.
+. Open the {aap_console_url}[Ansible Automation Platform console^] and log in with the credentials shown above.
 +
-//image::2026_summer/module-08-aap/01_AAP_Login.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/01_AAP_Login.png[link=self, window=blank, width=100%]
 
 . After logging in you will be placed on the *Overview* page of the platform.
 +
-//image::2026_summer/module-08-aap/02_AAP_Overview.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/02_AAP_Overview.png[link=self, window=blank, width=100%]
 
 [[explore_aap]]
 == Explore Your Pre-Configured Organization
@@ -49,7 +49,7 @@ Everyone taking this lab shares the same AAP instance, so each user has been giv
 
 . In the left-side menu click on *Access Management* and then *Organizations*, and confirm that you can see your organization, *{user}*.
 +
-//image::2026_summer/module-08-aap/03_Organizations.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/03_Organizations.png[link=self, window=blank, width=100%]
 
 . Click on *Automation Execution* in the left-side menu, then *Infrastructure*, and then *Credentials*. You will see two credentials that were created for you:
 +
@@ -58,7 +58,7 @@ Everyone taking this lab shares the same AAP instance, so each user has been giv
 +
 NOTE: These credentials were created ahead of time so that you do not have to copy a private key or an API token into a form. In your own environment you would typically create credentials like these yourself.
 +
-//image::2026_summer/module-08-aap/04_Credentials.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/04_Credentials.png[link=self, window=blank, width=100%]
 
 You will notice that there is no Project, Inventory or Job Template yet. Those are what we will create in this module.
 
@@ -67,21 +67,39 @@ You will notice that there is no Project, Inventory or Job Template yet. Those a
 
 We need a virtual machine for AAP to patch. Instead of using *Quick create* as we did in the *Virtual Machine Management* module, this time we will customize the VM's cloud-init configuration so that AAP's SSH key is authorized on the first boot. We are creating it first because the VM needs a few minutes to boot and report its network address, which we will need later in this module.
 
-. In the OpenShift console, switch to the *Virtualization* perspective, click on *Virtualization* and then *VirtualMachines*, and select your *vmexamples-{user}* project in the center column.
+. In the OpenShift console, click on the perspective dropdown at the top of the left-side menu and switch to the *Virtualization* perspective, and then click on *Overview* in the left-side menu.
 
-. Click on the *Create VirtualMachine* button and select *From template*, then select the *Fedora VM* tile and a dialog opens. Change the name to *ansible-demo*. This time, instead of *Quick create VirtualMachine*, click on the *Customize VirtualMachine* button.
+. Click on the *Project:* dropdown at the top of the page and select *vmexamples-{user}*.
 +
-//image::2026_summer/module-08-aap/05_Customize_VirtualMachine.png[link=self, window=blank, width=100%]
-
-. On the customization page, click on the *Scripts* tab, and in the section called *Cloud-init* click the *Edit* button.
+NOTE: If *vmexamples-{user}* is not in the list, you have not yet completed the *Virtual Machine Management* module, which is where this project is created. Click on the *Create Project* button at the bottom of the list, name the project *vmexamples-{user}* and click on the *Create* button.
 +
-//image::2026_summer/module-08-aap/06_Cloud_Init_Edit.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/05_virt_Overview.png[link=self, window=blank, width=100%]
 
-. Click the radio button to *Configure via: Script*. The editor already contains a generated cloud-config that sets the login password for the *fedora* user. Leave those lines exactly as they are, scroll to the end, and *add* the following two lines, which authorize the SSH key that AAP holds:
+. Click on *VirtualMachines* in the left-side menu, then click on the *Create* button and select *From template*.
++
+NOTE: Do not be concerned that *vmexamples-{user}* is not shown in the center column of this page. Projects that do not contain any virtual machines yet are hidden there by default. The project that you selected at the top of the page is the one that is used, and it is shown in the *Summary*.
++
+image::2026_summer/module-08-aap/06_virt_Create_Template.png[link=self, window=blank, width=100%]
+
+. Select the *Fedora VM* tile and a dialog opens. Change the *VirtualMachine name* to *ansible-demo*, and make sure that the *Project* shown is *vmexamples-{user}*. This time, instead of *Quick create VirtualMachine*, click on the *Customize VirtualMachine* button.
++
+image::2026_summer/module-08-aap/07_virt_Create_VM_init.png[link=self, window=blank, width=100%]
+
+. This opens the *Customize and create VirtualMachine* page, where the settings of the virtual machine can be reviewed and changed before it is created.
++
+image::2026_summer/module-08-aap/08_virt_Create_VM_customize.png[link=self, window=blank, width=100%]
+
+. Click on the *Scripts* tab, and in the section called *Cloud-init* click the *Edit* button.
++
+NOTE: As the warning at the top of the tab says, the cloud-init configuration is only applied the first time that the virtual machine boots. The tab also has a *Public SSH key* setting, which stores a key in a project secret. We are editing the cloud-init script directly instead, so that you can see exactly what is applied to the virtual machine.
++
+image::2026_summer/module-08-aap/09_virt_Create_VM_customize_script_init.png[link=self, window=blank, width=100%]
+
+. In the *Cloud-init* dialog, click the radio button to *Configure via: Script*. The editor already contains a generated cloud-config that sets the login password for the *fedora* user. Leave those lines exactly as they are, click on the empty line at the end of the script, and paste the following two lines, which authorize the SSH key that AAP holds:
 +
 [source,yaml,role=execute,subs="attributes+"]
 ----
-ssh_authorized_keys:
+  ssh_authorized_keys:
   - {aap_ssh_pubkey}
 ----
 +
@@ -95,20 +113,22 @@ userData: |-
   password: <your generated password>
   chpasswd: { expire: False }
   ssh_authorized_keys:
-    - {aap_ssh_pubkey}
+  - {aap_ssh_pubkey}
 ----
 +
 IMPORTANT: Do not replace the whole script. The generated password line is what allows you to log in to the VM's console in the last section of this module, so it must be left in place.
 +
-//image::2026_summer/module-08-aap/07_Cloud_Init_SSH_Key.png[link=self, window=blank, width=100%]
+IMPORTANT: Indentation matters in YAML. Both of the new lines must be indented by two spaces, lined up with the lines above them as shown in the screenshot. If they are not, cloud-init will ignore the key and AAP will not be able to log in to the virtual machine later in this module. If the editor has moved them, use the space bar and the *Backspace* key to fix it.
 
-. Click the *Save* button on the dialog, and then click the *Create VirtualMachine* button at the bottom of the page.
+. Click the *Save* button, and then click the *Apply* button.
 +
-//image::2026_summer/module-08-aap/08_Create_VirtualMachine.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/10_virt_Create_VM_customization_cloud_init.png[link=self, window=blank, width=100%]
 
-. The virtual machine will now start to boot. Continue with the next section while it does; by the time we synchronize the inventory later in this module, the *Status* of *ansible-demo* should show as *Running*.
+. Click the *Create VirtualMachine* button at the bottom of the page. Leave the *Start this VirtualMachine after creation* checkbox selected, so that the virtual machine starts to boot right away.
+
+. Continue with the next section while the virtual machine boots. By the time we synchronize the inventory later in this module, the *Status* of *ansible-demo* should show as *Running*.
 +
-//image::2026_summer/module-08-aap/09_VM_Running.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/11_VM_Running.png[link=self, window=blank, width=100%]
 
 [[create_project]]
 == Create a Project in AAP
@@ -117,7 +137,7 @@ An AAP *Project* is a synchronized copy of a source-controlled repository, typic
 
 . Return to the AAP console, click on *Automation Execution* in the left-side menu and then *Projects*, and click on the *Create project* button.
 +
-//image::2026_summer/module-08-aap/10_Create_Project.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/12_Create_Project.png[link=self, window=blank, width=100%]
 
 . Fill in the following values, and when finished click on the *Create project* button.
 +
@@ -127,11 +147,11 @@ An AAP *Project* is a synchronized copy of a source-controlled repository, typic
 * *Source control URL:* https://github.com/rh-ove-webinars/ocp-virt-roadshow-2026-showroom.git
 * *Source control branch/tag/commit:* main
 +
-//image::2026_summer/module-08-aap/11_Project_Form.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/13_Project_Form.png[link=self, window=blank, width=100%]
 
 . AAP will immediately synchronize the repository. Wait until the *Status* changes to *Successful*.
 +
-//image::2026_summer/module-08-aap/12_Project_Synced.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/14_Project_Synced.png[link=self, window=blank, width=100%]
 
 [[view_playbook]]
 == Take a Look at the Playbook
@@ -210,18 +230,18 @@ An AAP *Inventory* is the list of hosts that automation runs against. Rather tha
 
 . Click on *Automation Execution* in the left-side menu, then *Infrastructure*, then *Inventories*, and click on the *Create inventory* button and select *Create inventory*.
 +
-//image::2026_summer/module-08-aap/13_Create_Inventory.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/15_Create_Inventory.png[link=self, window=blank, width=100%]
 
 . Fill in the following values, and when finished click on the *Create inventory* button.
 +
 * *Name:* My VMs
 * *Organization:* {user}
 +
-//image::2026_summer/module-08-aap/14_Inventory_Form.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/16_Inventory_Form.png[link=self, window=blank, width=100%]
 
 . On the inventory that was just created, click on the *Sources* tab and then the *Create source* button.
 +
-//image::2026_summer/module-08-aap/15_Sources_Tab.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/17_Sources_Tab.png[link=self, window=blank, width=100%]
 
 . Fill in the following values:
 +
@@ -240,24 +260,24 @@ namespaces:
 +
 NOTE: Without the source variables above, AAP would discover every virtual machine that your user can see, which includes the three stopped virtual machines that were staged for you in the *vmimported-{user}* project. The playbook would then try, and fail, to patch them as well.
 +
-//image::2026_summer/module-08-aap/16_Source_Form.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/18_Source_Form.png[link=self, window=blank, width=100%]
 
 . Click on the *Create source* button to save it.
 +
-//image::2026_summer/module-08-aap/17_Source_Saved.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/19_Source_Saved.png[link=self, window=blank, width=100%]
 
 [[discover_vm]]
 == Sync the Inventory and Discover Your VM
 
 . On the *Sources* tab, click on the *Sync* button for *OpenShift Virtualization VMs*, and wait until the *Status* changes to *Successful*.
 +
-//image::2026_summer/module-08-aap/18_Inventory_Sync.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/20_Inventory_Sync.png[link=self, window=blank, width=100%]
 
 . Click on the *Hosts* tab of the inventory. You should see a single host named *vmexamples-{user}-ansible-demo*, which AAP discovered automatically from the OpenShift Virtualization API. Click on it to see the details, including the IP address that AAP found for it in the *ansible_host* variable.
 +
 NOTE: If there are no hosts, or the host has no IP address, the virtual machine has not finished booting and reporting its network address yet. Wait a minute, and then click on *Sync* again.
 +
-//image::2026_summer/module-08-aap/19_Host_Discovered.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/21_Host_Discovered.png[link=self, window=blank, width=100%]
 
 The same mechanism works when there are hundreds of virtual machines. As machines are created or removed in OpenShift, syncing the inventory picks up the change with no manual inventory management.
 
@@ -268,7 +288,7 @@ We now have a Project that contains a playbook, an Inventory that contains our v
 
 . Click on *Automation Execution* in the left-side menu and then *Templates*, and click on the *Create template* button and select *Create job template*.
 +
-//image::2026_summer/module-08-aap/20_Create_Template.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/22_Create_Template.png[link=self, window=blank, width=100%]
 
 . Fill in the following values:
 +
@@ -279,19 +299,19 @@ We now have a Project that contains a playbook, an Inventory that contains our v
 * *Playbook:* automation/vm-content/playbooks/patch-vm.yml
 * *Credentials:* click on the selection button, choose the *Machine* credential type, and select *VM SSH Key*
 +
-//image::2026_summer/module-08-aap/21_Template_Form.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/23_Template_Form.png[link=self, window=blank, width=100%]
 
 . Click on the *Create job template* button to save it.
 
 . Click on the *Launch* button to run the job.
 +
-//image::2026_summer/module-08-aap/22_Launch.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/24_Launch.png[link=self, window=blank, width=100%]
 
 . You will be taken to the output of the running job, where you can follow the playbook task by task. Wait until the job status changes to *Successful*.
 +
 NOTE: This will take about six minutes. A newly created virtual machine has many updates waiting, and the playbook then reboots it, so the output will appear to stop on the *Reboot the VM* task while the virtual machine restarts. This is expected.
 +
-//image::2026_summer/module-08-aap/23_Job_Output.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/25_Job_Output.png[link=self, window=blank, width=100%]
 
 [[verify]]
 == Verify the Patch
@@ -300,7 +320,7 @@ Now let's confirm that the change was actually made on the virtual machine.
 
 . In the OpenShift console, click on the *ansible-demo* virtual machine, then the *Console* tab, and use the *Guest login credentials* that are provided, along with the *Copy* and *Paste to console* buttons, to log in as the *fedora* user.
 +
-//image::2026_summer/module-08-aap/24_VM_Console.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/26_VM_Console.png[link=self, window=blank, width=100%]
 
 . Run the following command to display the banner that the playbook left behind:
 +
@@ -316,7 +336,7 @@ You should see a line similar to the following:
 Patched by Ansible Automation Platform on 2026-09-21T08:57:34Z (kernel 7.2.5-200.fc44.x86_64)
 ----
 +
-//image::2026_summer/module-08-aap/25_Motd.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/27_Motd.png[link=self, window=blank, width=100%]
 
 . Hit *Ctrl-D* twice to log out of the virtual machine.
 
@@ -332,7 +352,7 @@ To save resources for the next lab, please stop the virtual machine that you cre
 
 Now the *ansible-demo* virtual machine should be in *Stopped* state.
 
-//image::2026_summer/module-08-aap/26_VM_Stopped.png[link=self, window=blank, width=100%]
+//image::2026_summer/module-08-aap/28_VM_Stopped.png[link=self, window=blank, width=100%]
 
 == Summary
 
