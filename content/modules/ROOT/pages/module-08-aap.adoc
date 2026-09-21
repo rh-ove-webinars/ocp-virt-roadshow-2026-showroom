@@ -74,20 +74,30 @@ We need a virtual machine for Ansible to manage. This time, instead of a quick-c
 +
 // TODO: screenshot - Scripts tab, Cloud-init Edit button
 
-. Choose *Configure via: Script*, and replace the contents with the following, which authorizes the AAP-managed SSH key for the default *fedora* user on first boot:
+. Choose *Configure via: Script*. The editor already contains a generated `#cloud-config` that sets the *fedora* user's login password -- *leave those lines exactly as they are*, so that you can still log in at the console later. Scroll to the end and *add* the following two lines, which authorize the AAP-managed SSH key for the *fedora* user on first boot:
 +
 [source,yaml,role=execute,subs="attributes+"]
+----
+ssh_authorized_keys:
+  - {aap_ssh_pubkey}
+----
++
+The finished script should look something like this (your generated password will differ):
++
+[source,yaml,subs="attributes+"]
 ----
 userData: |-
   #cloud-config
   user: fedora
-  password: ${CLOUD_USER_PASSWORD}
+  password: <your generated password>
   chpasswd: { expire: False }
   ssh_authorized_keys:
     - {aap_ssh_pubkey}
 ----
 +
-// TODO: screenshot - cloud-init script with ssh_authorized_keys
+IMPORTANT: Don't replace the whole script -- if you overwrite the generated password line you will lock yourself out of the console login used in the last step of this module.
++
+// TODO: screenshot - cloud-init script with ssh_authorized_keys appended
 
 . Click *Save*, then click *Create VirtualMachine*.
 +
@@ -164,12 +174,19 @@ Click *Create inventory*.
 . Fill in:
 +
 * *Name:* OpenShift Virtualization VMs
-* *Source:* Sourced from a Project
-* *Project:* Roadshow Automation
-* *Inventory file:* `automation/vm-content/inventory/vms.kubernetes.yml`
+* *Source:* OpenShift Virtualization
 * *Credential:* OpenShift Access
+* *Source variables:* add the following, which limits discovery to your own project:
 +
-This inventory file uses the `kubernetes.core.k8s` dynamic inventory plugin to list running `VirtualMachineInstance` objects as Ansible hosts. Because it's using *your* `OpenShift Access` credential, it will only ever discover virtual machines in projects that *your* OpenShift account can see -- namely, your own *vmexamples-{user}* project.
+[source,yaml,role=execute,subs="attributes+"]
+----
+namespaces:
+  - vmexamples-{user}
+----
++
+*OpenShift Virtualization* is a built-in, Red Hat supported inventory source type: it uses your *OpenShift Access* credential to query the OpenShift API and turn virtual machines into Ansible hosts, with no inventory file to maintain. Because it uses *your* credential, it can only ever see virtual machines that *your* OpenShift account can see.
++
+NOTE: Without the *Source variables* above, AAP would discover _every_ virtual machine your account can see -- including the three stopped virtual machines that were pre-staged in your *vmimported-{user}* project for the migration module -- and the playbook we run later would then try (and fail) to patch them too.
 +
 // TODO: screenshot - Inventory Source creation form filled in
 
@@ -184,9 +201,9 @@ This inventory file uses the `kubernetes.core.k8s` dynamic inventory plugin to l
 +
 // TODO: screenshot - syncing the inventory source
 
-. Click on the *Hosts* tab for the inventory. If *ansible-demo* has finished booting, you should now see it listed as a host -- discovered automatically from the OpenShift Virtualization API, using nothing more than the fact that it is a running VM in your project. Click on the host to see the IP address AAP found for it.
+. Click on the *Hosts* tab for the inventory. You should see exactly one host, named *vmexamples-{user}-ansible-demo* (AAP prefixes the project name) -- discovered automatically from the OpenShift Virtualization API, using nothing more than the fact that it is a VM in your project. Click on the host to see the IP address AAP found for it (the `ansible_host` variable).
 +
-If you don't see it yet, give the VM another minute to finish booting and reporting its network address, then click *Sync* again.
+If you see no hosts, or the host has no IP address, the VM hasn't finished booting and reporting its network address yet. Give it another minute, then click *Sync* again.
 +
 // TODO: screenshot - ansible-demo discovered as an inventory host
 
@@ -222,6 +239,8 @@ With a Project, an Inventory, and a discovered host in place, we can now create 
 
 . You will be taken to the live job output page. Watch as the playbook updates packages, checks for and performs a reboot if needed, and writes its summary. Wait for the job to reach a *Successful* status.
 +
+NOTE: This takes several minutes (about six in testing). A freshly built VM has a lot of updates waiting, and the playbook then reboots it -- so the output will appear to pause on the *Reboot the VM* task while the VM restarts. That's expected, not a hang.
++
 // TODO: screenshot - live job output showing successful completion
 
 [[verify]]
@@ -242,7 +261,7 @@ You should see a line similar to:
 +
 [source,text]
 ----
-Patched by Ansible Automation Platform on 2026-09-18T14:32:01Z (kernel 6.11.0-63.fc41.x86_64)
+Patched by Ansible Automation Platform on 2026-09-21T08:57:34Z (kernel 7.2.5-200.fc44.x86_64)
 ----
 +
 // TODO: screenshot - motd output showing the patch banner

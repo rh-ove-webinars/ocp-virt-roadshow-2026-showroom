@@ -100,6 +100,17 @@ Module 8, referencing these two credentials by name.
   federate to Controller's own org list (by name), then uses Controller's *own* numeric id
   for that org for the credentials -- it is not guaranteed to match the gateway's numeric id
   for the same org.
+- **Use AAP's native "OpenShift Virtualization" inventory source, not a custom plugin.** An
+  earlier version of Module 8 had attendees point an SCM-sourced inventory at a
+  `kubernetes.core.k8s` inventory plugin config file. That plugin was **removed in
+  `kubernetes.core` 6.0.0**, which the AAP 2.7 execution environment ships, so the very first
+  sync failed. Worse, the repo-root `ansible.cfg` that enabled the plugin then broke *every*
+  playbook run in the project, not just inventory syncs. Both files are gone; Module 8 now
+  uses the built-in, supported source type (it uses the same "OpenShift or Kubernetes API
+  Bearer Token" credential this automation already provisions). Attendees must scope it to
+  their own project with `namespaces: [vmexamples-userN]` in the source variables, otherwise it
+  also discovers the stopped, pre-staged VMs in `vmimported-userN`. This was only caught by
+  running the whole attendee flow end to end against a live cluster.
 - **A `uri` module quirk that cost real debugging time:** a Jinja-templated integer nested
   inside a `body:` dict on an `ansible.builtin.uri` task gets re-stringified before being
   JSON-encoded (confirmed with `-vvv`; `| int` does not survive it). Most Controller API
