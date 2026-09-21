@@ -1,80 +1,83 @@
 = Automating VMs with Ansible Automation Platform
 
+// Screenshots: capture each commented-out image:: line below as 2026_summer/module-08-aap/<name>.png
+// (same naming convention as the other modules), then remove the leading // to enable it.
+// The playbook shown in the "Take a Look at the Playbook" section is a copy of
+// automation/vm-content/playbooks/patch-vm.yml -- if you change one, change the other.
+
 == Introduction
 
-So far in this roadshow we have managed virtual machines directly through the OpenShift web console. In the real world, administrators managing fleets of virtual machines -- whether ten or ten thousand -- need to automate repetitive day-2 tasks like patching, configuration changes, and compliance checks rather than clicking through them one at a time.
+Once a virtual machine has been created, most of the work of keeping it healthy is repetitive: applying patches, rebooting when a new kernel arrives, adjusting configuration, and proving afterwards that it actually happened. Doing that by hand, one VM at a time in the console, does not scale past a handful of machines, and it is exactly the kind of day-2 work that administrators of large virtual environments automate.
 
-Red Hat Ansible Automation Platform (AAP) is designed for exactly this. In this module we will build, by hand, the same kind of automation pipeline you would set up in a real environment: a Project pointing at a Git repository, a dynamic Inventory that discovers OpenShift Virtualization VMs automatically, and a Job Template that runs a playbook against whatever it finds. We will then create a brand new virtual machine, point our new automation at it, and watch AAP patch it for us.
+https://www.redhat.com/en/technologies/management/ansible[*Red Hat Ansible Automation Platform*^] (AAP) is Red Hat's enterprise automation platform. It runs Ansible playbooks against sets of hosts, stores the credentials needed to reach them, and gives teams a shared place to build, launch and audit that automation. Because OpenShift Virtualization virtual machines are described by the same Kubernetes API as everything else in the cluster, AAP can also discover them automatically, so the list of machines to automate never has to be maintained by hand.
+
+In this portion of the lab, we will build a small automation pipeline in AAP ourselves and use it to patch a virtual machine. You will create a new virtual machine, then in AAP you will create a *Project* that holds the playbook, a dynamic *Inventory* that discovers the VM, and a *Job Template* that ties them together, and finally launch it.
 
 .*Goals*
 
-* Create a virtual machine pre-configured for Ansible access using cloud-init
-* Create an AAP Project backed by a Git repository
-* Create a dynamic AAP Inventory that discovers OpenShift Virtualization VMs using OpenShift credentials
-* Review the pre-built playbook that will patch your VM
+* Create a virtual machine that is ready to be managed by Ansible using cloud-init
+* Create an AAP Project that pulls a playbook from a Git repository
+* Review the playbook that will patch the virtual machine
+* Create a dynamic Inventory that discovers OpenShift Virtualization VMs using OpenShift credentials
 * Create and launch a Job Template
-* Verify the automation actually changed your VM
+* Verify that the automation changed the virtual machine
 
-NOTE: Your Ansible Automation Platform Organization and user have already been created for you by your workshop facilitator, along with two Credentials -- *VM SSH Key* and *OpenShift Access* -- so that you don't have to paste any private keys or API tokens by hand. Everything else in this module, you will build yourself.
+NOTE: Your AAP organization and user, along with two credentials named *VM SSH Key* and *OpenShift Access*, have already been created for you, so that you do not have to copy private keys or API tokens by hand. Everything else in this module you will build yourself.
+
+Your Ansible Automation Platform console is available {aap_console_url}[here^].
+
+Your login is the same as for the OpenShift console:
+
+* *User:* {user}
+* *Password:* {password}
 
 [[login_aap]]
 == Log in to Ansible Automation Platform
 
-. Ansible Automation Platform is available {aap_console_url}[here^].
+. Open the {aap_console_url}[Ansible Automation Platform console^] and log in with the *User* and *Password* shown above.
++
+//image::2026_summer/module-08-aap/01_AAP_Login.png[link=self, window=blank, width=100%]
 
-. Log in using the same credentials you have been using for the OpenShift console all workshop:
+. After logging in you will be placed on the *Overview* page of the platform.
 +
-* *User:* {user}
-* *Password:* {password}
-+
-// TODO: screenshot - AAP login screen
-
-. After logging in you will land on the Automation Controller *Dashboard*.
-+
-// TODO: screenshot - AAP dashboard after login
+//image::2026_summer/module-08-aap/02_AAP_Overview.png[link=self, window=blank, width=100%]
 
 [[explore_aap]]
 == Explore Your Pre-Configured Organization
 
-Every attendee in this workshop has their own Organization in AAP, matching your username, so that we can all safely share the same AAP instance without seeing each other's content.
+Everyone taking this lab shares the same AAP instance, so each user has been given their own *Organization*, named after their username. An organization is the boundary that keeps one team's projects, inventories and credentials separate from another's.
 
-. Click on *Access Management -> Organizations* and confirm you can see your organization, named after your username (e.g. *{user}*).
+. In the left-side menu click on *Access Management* and then *Organizations*, and confirm that you can see your organization, *{user}*.
 +
-// TODO: screenshot - Organizations list showing the user's org
+//image::2026_summer/module-08-aap/03_Organizations.png[link=self, window=blank, width=100%]
 
-. Click on *Automation Execution -> Infrastructure -> Credentials*. You should see two credentials already available to you:
+. Click on *Automation Execution* in the left-side menu, then *Infrastructure*, and then *Credentials*. You will see two credentials that were created for you:
 +
-* *VM SSH Key* -- the SSH credential AAP will use to connect to the virtual machine we are about to create.
-* *OpenShift Access* -- the credential AAP will use to talk to the OpenShift API and discover virtual machines in your project.
+* *VM SSH Key* is the SSH key that AAP will use to log in to the virtual machine we are about to create.
+* *OpenShift Access* is the credential that AAP will use to query the OpenShift API in order to discover virtual machines.
 +
-NOTE: These were provisioned for you so that this module doesn't require pasting private keys or API tokens into a form on a shared, projected screen. In your own environment you would typically create credentials like these yourself, the same way you are about to create everything else in this module.
+NOTE: These credentials were created ahead of time so that you do not have to copy a private key or an API token into a form. In your own environment you would typically create credentials like these yourself.
 +
-// TODO: screenshot - Credentials list showing VM SSH Key and OpenShift Access
+//image::2026_summer/module-08-aap/04_Credentials.png[link=self, window=blank, width=100%]
 
-You will notice there is no Project, Inventory, or Job Template waiting for you yet -- that's what we're about to build.
+You will notice that there is no Project, Inventory or Job Template yet. Those are what we will create in this module.
 
 [[create_vm]]
-== Create a Virtual Machine for This Exercise
+== Create a Virtual Machine for Ansible to Manage
 
-We need a virtual machine for Ansible to manage. This time, instead of a quick-create, we will customize the VM's cloud-init configuration so that our AAP credential's SSH key is authorized on first boot.
+We need a virtual machine for AAP to patch. Instead of using *Quick create* as we did in the *Virtual Machine Management* module, this time we will customize the VM's cloud-init configuration so that AAP's SSH key is authorized on the first boot. We are creating it first because the VM needs a few minutes to boot and report its network address, which we will need later in this module.
 
-. Since this VM will take a couple of minutes to boot and become discoverable, let's start it now and come back to configuring AAP while it finishes.
+. In the OpenShift console, switch to the *Virtualization* perspective, click on *Virtualization* and then *VirtualMachines*, and select your *vmexamples-{user}* project in the center column.
 
-. In the OpenShift console, switch to the *Virtualization* perspective, and select your *vmexamples-{user}* project.
-
-. Click *Create VirtualMachine*, select *From template*, and choose the *Fedora VM* tile as you did in Module 1. This time, click *Customize VirtualMachine* instead of *Quick create VirtualMachine*.
+. Click on the *Create VirtualMachine* button and select *From template*, then select the *Fedora VM* tile and a dialog opens. Change the name to *ansible-demo*. This time, instead of *Quick create VirtualMachine*, click on the *Customize VirtualMachine* button.
 +
-// TODO: screenshot - Customize VirtualMachine button on the Fedora tile
+//image::2026_summer/module-08-aap/05_Customize_VirtualMachine.png[link=self, window=blank, width=100%]
 
-. Set the name to *ansible-demo* and continue to the customization screen.
+. On the customization page, click on the *Scripts* tab, and in the section called *Cloud-init* click the *Edit* button.
 +
-// TODO: screenshot - naming the VM ansible-demo
+//image::2026_summer/module-08-aap/06_Cloud_Init_Edit.png[link=self, window=blank, width=100%]
 
-. Click on the *Scripts* tab, and in the *Cloud-init* section click *Edit*.
-+
-// TODO: screenshot - Scripts tab, Cloud-init Edit button
-
-. Choose *Configure via: Script*. The editor already contains a generated `#cloud-config` that sets the *fedora* user's login password -- *leave those lines exactly as they are*, so that you can still log in at the console later. Scroll to the end and *add* the following two lines, which authorize the AAP-managed SSH key for the *fedora* user on first boot:
+. Click the radio button to *Configure via: Script*. The editor already contains a generated cloud-config that sets the login password for the *fedora* user. Leave those lines exactly as they are, scroll to the end, and *add* the following two lines, which authorize the SSH key that AAP holds:
 +
 [source,yaml,role=execute,subs="attributes+"]
 ----
@@ -82,7 +85,7 @@ ssh_authorized_keys:
   - {aap_ssh_pubkey}
 ----
 +
-The finished script should look something like this (your generated password will differ):
+When you are finished, the script should look like the following (your generated password will be different):
 +
 [source,yaml,subs="attributes+"]
 ----
@@ -95,88 +98,137 @@ userData: |-
     - {aap_ssh_pubkey}
 ----
 +
-IMPORTANT: Don't replace the whole script -- if you overwrite the generated password line you will lock yourself out of the console login used in the last step of this module.
+IMPORTANT: Do not replace the whole script. The generated password line is what allows you to log in to the VM's console in the last section of this module, so it must be left in place.
 +
-// TODO: screenshot - cloud-init script with ssh_authorized_keys appended
+//image::2026_summer/module-08-aap/07_Cloud_Init_SSH_Key.png[link=self, window=blank, width=100%]
 
-. Click *Save*, then click *Create VirtualMachine*.
+. Click the *Save* button on the dialog, and then click the *Create VirtualMachine* button at the bottom of the page.
 +
-// TODO: screenshot - Create VirtualMachine button
+//image::2026_summer/module-08-aap/08_Create_VirtualMachine.png[link=self, window=blank, width=100%]
 
-. Wait for *ansible-demo* to reach *Running* status before continuing -- it needs to be up and reporting its network address for AAP to discover it later in this module.
+. The virtual machine will now start to boot. Continue with the next section while it does; by the time we synchronize the inventory later in this module, the *Status* of *ansible-demo* should show as *Running*.
 +
-// TODO: screenshot - ansible-demo VM running
+//image::2026_summer/module-08-aap/09_VM_Running.png[link=self, window=blank, width=100%]
 
 [[create_project]]
 == Create a Project in AAP
 
-An AAP *Project* is a synced copy of a source-controlled repository -- typically Git -- that holds your playbooks and other automation content. Let's create one pointing at the repository this workshop uses.
+An AAP *Project* is a synchronized copy of a source-controlled repository, typically Git, which holds playbooks and other automation content. Keeping automation in source control means it can be reviewed, versioned and shared like any other code. Let's create a Project that points to the repository this lab is built from, which also contains the playbook we will use.
 
-. Back in AAP, navigate to *Automation Execution -> Projects*, and click *Create project*.
+. Return to the AAP console, click on *Automation Execution* in the left-side menu and then *Projects*, and click on the *Create project* button.
 +
-// TODO: screenshot - Projects list, Create project button
+//image::2026_summer/module-08-aap/10_Create_Project.png[link=self, window=blank, width=100%]
 
-. Fill in the following values:
+. Fill in the following values, and when finished click on the *Create project* button.
 +
 * *Name:* Roadshow Automation
 * *Organization:* {user}
 * *Source control type:* Git
-* *Source control URL:* `https://github.com/rh-ove-webinars/ocp-virt-roadshow-2026-showroom.git`
+* *Source control URL:* https://github.com/rh-ove-webinars/ocp-virt-roadshow-2026-showroom.git
 * *Source control branch/tag/commit:* main
 +
-// TODO: screenshot - Project creation form filled in
+//image::2026_summer/module-08-aap/11_Project_Form.png[link=self, window=blank, width=100%]
 
-. Click *Save*. AAP will immediately perform an initial sync of the repository -- wait for the status to reach *Successful* before moving on.
+. AAP will immediately synchronize the repository. Wait until the *Status* changes to *Successful*.
 +
-// TODO: screenshot - Project sync status Successful
+//image::2026_summer/module-08-aap/12_Project_Synced.png[link=self, window=blank, width=100%]
 
 [[view_playbook]]
 == Take a Look at the Playbook
 
-Before we run any automation blindly, let's actually read what it does.
+Before running any automation, it is worth reading what it will do to your machines. The repository your Project just synchronized contains a playbook called *patch-vm.yml*, which is shown below in full.
 
-. Open the playbook directly on GitHub:
-+
-https://github.com/rh-ove-webinars/ocp-virt-roadshow-2026-showroom/blob/main/automation/vm-content/playbooks/patch-vm.yml[View patch-vm.yml on GitHub^]
+[source,yaml]
+----
+---
+# Pre-built demo playbook used by the "Automating VMs with Ansible Automation Platform"
+# module of the lab guide, which reproduces this file inline -- keep the two in sync.
+# Deliberately simple: update packages, reboot if the kernel changed, confirm the VM comes
+# back up, and leave visible proof of the change in /etc/motd.
+- name: Patch management demo - OpenShift Virtualization VM
+  hosts: all
+  become: true
+  gather_facts: true
 
-. Notice what it does, step by step:
-+
-* Updates all packages on the target host with `dnf`
-* Checks whether the update requires a reboot
-* Reboots the VM and waits for it to come back online, only if needed
-* Writes a line into `/etc/motd` recording that it was patched by Ansible Automation Platform, along with a timestamp and the running kernel version
-* Prints a short summary of what changed
-+
-This is a deliberately simple example of a patch-management playbook -- the same pattern (update, conditionally reboot, verify, report) is exactly what you would build on for a real fleet of VMs, just against a much larger inventory.
+  tasks:
+    - name: Update all packages
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+      register: dnf_update
+
+    - name: Check whether a reboot is required
+      ansible.builtin.command: dnf needs-restarting -r
+      register: needs_restart
+      changed_when: false
+      failed_when: needs_restart.rc not in [0, 1]
+
+    - name: Reboot the VM if a newer kernel/library requires it
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+      when: needs_restart.rc == 1
+
+    - name: Wait for the VM to come back and accept connections
+      ansible.builtin.wait_for_connection:
+        delay: 10
+        timeout: 300
+      when: needs_restart.rc == 1
+
+    - name: Re-gather facts after the reboot
+      ansible.builtin.setup:
+      when: needs_restart.rc == 1
+
+    - name: Record a patch banner in /etc/motd as visible proof of the change
+      ansible.builtin.lineinfile:
+        path: /etc/motd
+        line: "Patched by Ansible Automation Platform on {{ ansible_date_time.iso8601 }} (kernel {{ ansible_kernel }})"
+        create: true
+
+    - name: Show a summary of what changed
+      ansible.builtin.debug:
+        msg:
+          - "Host: {{ inventory_hostname }}"
+          - "Packages updated: {{ dnf_update.changed }}"
+          - "Reboot performed: {{ needs_restart.rc == 1 }}"
+          - "Kernel now running: {{ ansible_kernel }}"
+----
+
+Notice the following about how the playbook is put together:
+
+* *hosts: all* means the playbook runs against every host in whichever inventory it is launched with. We will launch it against an inventory that contains only our virtual machine.
+* *become: true* tells Ansible to run the tasks with administrative privileges (using `sudo`), which package updates and writing to `/etc` require.
+* Each entry under *tasks* uses an Ansible module to describe a desired outcome rather than a script of commands: *dnf* updates the packages, *reboot* restarts the machine and waits for it to return, and *lineinfile* makes sure a line is present in a file.
+* Some tasks only run *when* a condition is true. The playbook asks `dnf needs-restarting -r` whether the update requires a reboot and only reboots the virtual machine if it does.
+* Finally, the playbook writes a line to `/etc/motd` containing the date and the running kernel version. This leaves a visible record on the machine, which we will look for at the end of the module.
+
+This is a deliberately simple example, but the pattern of updating, conditionally rebooting, verifying and reporting is the same one that is used to patch a fleet of hundreds of machines. Only the size of the inventory changes.
 
 [[create_inventory]]
 == Create a Dynamic Inventory Using OpenShift Credentials
 
-Rather than typing in the name or IP address of our VM by hand, we are going to have AAP discover it automatically from the OpenShift Virtualization API.
+An AAP *Inventory* is the list of hosts that automation runs against. Rather than typing in the name and address of our virtual machine by hand, we will have AAP discover it from the OpenShift Virtualization API, so that the inventory stays correct as virtual machines come and go.
 
-. Navigate to *Automation Execution -> Infrastructure -> Inventories*, and click *Create inventory -> Create inventory*.
+. Click on *Automation Execution* in the left-side menu, then *Infrastructure*, then *Inventories*, and click on the *Create inventory* button and select *Create inventory*.
 +
-// TODO: screenshot - Inventories list, Create inventory button
+//image::2026_summer/module-08-aap/13_Create_Inventory.png[link=self, window=blank, width=100%]
 
-. Fill in:
+. Fill in the following values, and when finished click on the *Create inventory* button.
 +
 * *Name:* My VMs
 * *Organization:* {user}
 +
-Click *Create inventory*.
-+
-// TODO: screenshot - Inventory creation form
+//image::2026_summer/module-08-aap/14_Inventory_Form.png[link=self, window=blank, width=100%]
 
-. Once created, click on the *Sources* tab, then *Create source*.
+. On the inventory that was just created, click on the *Sources* tab and then the *Create source* button.
 +
-// TODO: screenshot - Inventory Sources tab, Create source button
+//image::2026_summer/module-08-aap/15_Sources_Tab.png[link=self, window=blank, width=100%]
 
-. Fill in:
+. Fill in the following values:
 +
 * *Name:* OpenShift Virtualization VMs
 * *Source:* OpenShift Virtualization
 * *Credential:* OpenShift Access
-* *Source variables:* add the following, which limits discovery to your own project:
+* *Source variables:* add the following, which limits the discovery to your own project:
 +
 [source,yaml,role=execute,subs="attributes+"]
 ----
@@ -184,99 +236,106 @@ namespaces:
   - vmexamples-{user}
 ----
 +
-*OpenShift Virtualization* is a built-in, Red Hat supported inventory source type: it uses your *OpenShift Access* credential to query the OpenShift API and turn virtual machines into Ansible hosts, with no inventory file to maintain. Because it uses *your* credential, it can only ever see virtual machines that *your* OpenShift account can see.
+*OpenShift Virtualization* is an inventory source type that is built in to AAP and supported by Red Hat. It uses the *OpenShift Access* credential to query the OpenShift API and turns virtual machines into Ansible hosts, with no inventory file to maintain. Since it uses your credential, it can only ever see the virtual machines that your own OpenShift user can see.
 +
-NOTE: Without the *Source variables* above, AAP would discover _every_ virtual machine your account can see -- including the three stopped virtual machines that were pre-staged in your *vmimported-{user}* project for the migration module -- and the playbook we run later would then try (and fail) to patch them too.
+NOTE: Without the source variables above, AAP would discover every virtual machine that your user can see, which includes the three stopped virtual machines that were staged for you in the *vmimported-{user}* project. The playbook would then try, and fail, to patch them as well.
 +
-// TODO: screenshot - Inventory Source creation form filled in
+//image::2026_summer/module-08-aap/16_Source_Form.png[link=self, window=blank, width=100%]
 
-. Click *Save*.
+. Click on the *Create source* button to save it.
 +
-// TODO: screenshot - Inventory Source saved
+//image::2026_summer/module-08-aap/17_Source_Saved.png[link=self, window=blank, width=100%]
 
 [[discover_vm]]
 == Sync the Inventory and Discover Your VM
 
-. Back on the *Sources* tab, click the *Sync* button (the circular arrows icon) next to *OpenShift Virtualization VMs*, and watch the *Status* change to *Running*, then *Successful*.
+. On the *Sources* tab, click on the *Sync* button for *OpenShift Virtualization VMs*, and wait until the *Status* changes to *Successful*.
 +
-// TODO: screenshot - syncing the inventory source
+//image::2026_summer/module-08-aap/18_Inventory_Sync.png[link=self, window=blank, width=100%]
 
-. Click on the *Hosts* tab for the inventory. You should see exactly one host, named *vmexamples-{user}-ansible-demo* (AAP prefixes the project name) -- discovered automatically from the OpenShift Virtualization API, using nothing more than the fact that it is a VM in your project. Click on the host to see the IP address AAP found for it (the `ansible_host` variable).
+. Click on the *Hosts* tab of the inventory. You should see a single host named *vmexamples-{user}-ansible-demo*, which AAP discovered automatically from the OpenShift Virtualization API. Click on it to see the details, including the IP address that AAP found for it in the *ansible_host* variable.
 +
-If you see no hosts, or the host has no IP address, the VM hasn't finished booting and reporting its network address yet. Give it another minute, then click *Sync* again.
+NOTE: If there are no hosts, or the host has no IP address, the virtual machine has not finished booting and reporting its network address yet. Wait a minute, and then click on *Sync* again.
 +
-// TODO: screenshot - ansible-demo discovered as an inventory host
+//image::2026_summer/module-08-aap/19_Host_Discovered.png[link=self, window=blank, width=100%]
 
-This is the same dynamic discovery mechanism you would use against a much larger environment -- as new virtual machines are created (or removed) in OpenShift, a re-sync of the inventory picks up the change automatically, with no manual inventory management required.
+The same mechanism works when there are hundreds of virtual machines. As machines are created or removed in OpenShift, syncing the inventory picks up the change with no manual inventory management.
 
 [[create_template]]
 == Create and Launch a Job Template
 
-With a Project, an Inventory, and a discovered host in place, we can now create a *Job Template* -- the object that ties a playbook, an inventory, and credentials together into something you can launch.
+We now have a Project that contains a playbook, an Inventory that contains our virtual machine, and a credential that can log in to it. A *Job Template* ties those pieces together into something that can be launched, and re-launched, on demand.
 
-. Navigate to *Automation Execution -> Templates*, and click *Create template -> Create job template*.
+. Click on *Automation Execution* in the left-side menu and then *Templates*, and click on the *Create template* button and select *Create job template*.
 +
-// TODO: screenshot - Templates list, Create job template button
+//image::2026_summer/module-08-aap/20_Create_Template.png[link=self, window=blank, width=100%]
 
-. Fill in:
+. Fill in the following values:
 +
 * *Name:* Patch My VM
 * *Job type:* Run
 * *Inventory:* My VMs
 * *Project:* Roadshow Automation
 * *Playbook:* automation/vm-content/playbooks/patch-vm.yml
-* *Credentials:* click *Add*, select the *Machine* category, and choose *VM SSH Key*
+* *Credentials:* click on the selection button, choose the *Machine* credential type, and select *VM SSH Key*
 +
-// TODO: screenshot - Job Template creation form filled in
+//image::2026_summer/module-08-aap/21_Template_Form.png[link=self, window=blank, width=100%]
 
-. Click *Save*.
-+
-// TODO: screenshot - Job Template saved
+. Click on the *Create job template* button to save it.
 
-. Click the rocket ship *Launch* button.
+. Click on the *Launch* button to run the job.
 +
-// TODO: screenshot - launching the job template
+//image::2026_summer/module-08-aap/22_Launch.png[link=self, window=blank, width=100%]
 
-. You will be taken to the live job output page. Watch as the playbook updates packages, checks for and performs a reboot if needed, and writes its summary. Wait for the job to reach a *Successful* status.
+. You will be taken to the output of the running job, where you can follow the playbook task by task. Wait until the job status changes to *Successful*.
 +
-NOTE: This takes several minutes (about six in testing). A freshly built VM has a lot of updates waiting, and the playbook then reboots it -- so the output will appear to pause on the *Reboot the VM* task while the VM restarts. That's expected, not a hang.
+NOTE: This will take about six minutes. A newly created virtual machine has many updates waiting, and the playbook then reboots it, so the output will appear to stop on the *Reboot the VM* task while the virtual machine restarts. This is expected.
 +
-// TODO: screenshot - live job output showing successful completion
+//image::2026_summer/module-08-aap/23_Job_Output.png[link=self, window=blank, width=100%]
 
 [[verify]]
 == Verify the Patch
 
-Let's go back to the OpenShift console and confirm the change actually happened on the virtual machine.
+Now let's confirm that the change was actually made on the virtual machine.
 
-. In the OpenShift console, open the *Console* tab for the *ansible-demo* VM and log in using the *fedora* user and the guest credentials shown, as you have done in earlier modules.
+. In the OpenShift console, click on the *ansible-demo* virtual machine, then the *Console* tab, and use the *Guest login credentials* that are provided, along with the *Copy* and *Paste to console* buttons, to log in as the *fedora* user.
++
+//image::2026_summer/module-08-aap/24_VM_Console.png[link=self, window=blank, width=100%]
 
-. Run the following command to see the banner Ansible left behind:
+. Run the following command to display the banner that the playbook left behind:
 +
 [source,sh,role=execute]
 ----
 cat /etc/motd
 ----
 +
-You should see a line similar to:
+You should see a line similar to the following:
 +
 [source,text]
 ----
 Patched by Ansible Automation Platform on 2026-09-21T08:57:34Z (kernel 7.2.5-200.fc44.x86_64)
 ----
 +
-// TODO: screenshot - motd output showing the patch banner
+//image::2026_summer/module-08-aap/25_Motd.png[link=self, window=blank, width=100%]
 
-. This confirms that Ansible Automation Platform connected to your virtual machine, applied updates, and (if a reboot was needed) rebooted it -- using automation you configured yourself in this module, from a dynamically discovered inventory, end to end.
+. Hit *Ctrl-D* twice to log out of the virtual machine.
+
+This confirms that AAP logged in to the virtual machine, applied the updates, rebooted it, and recorded the result, all from a job that you configured and launched yourself.
 
 [[cleanup]]
 == Cleanup
 
-This workshop's cluster is shared by everyone attending, so let's free up the resources this module used before moving on.
+To save resources for the next lab, please stop the virtual machine that you created in this module.
 
-. Click on *Virtualization -> VirtualMachines*, select your *ansible-demo* VM, and stop it.
-+
-// TODO: screenshot - stopping ansible-demo
+. Click on *Virtualization -> VirtualMachines*.
+. Select the *ansible-demo* virtual machine in the center tree column, and select the *Stop* button or option from the *Actions* dropdown menu.
+
+Now the *ansible-demo* virtual machine should be in *Stopped* state.
+
+//image::2026_summer/module-08-aap/26_VM_Stopped.png[link=self, window=blank, width=100%]
 
 == Summary
 
-In this module we built an Ansible Automation Platform automation pipeline by hand: a Project synced from Git, a dynamic Inventory that discovers OpenShift Virtualization VMs using our own OpenShift credentials, and a Job Template that ties a pre-built patch-management playbook to that inventory. We created a new virtual machine configured via cloud-init to accept AAP's SSH key, watched AAP discover it automatically, and launched a real patch against it -- leaving a verifiable record of the change on the VM itself. This same pattern -- Project, Inventory, Job Template -- scales from the one VM we patched here to fleets of hundreds or thousands of virtual machines managed the same way.
+In this section of our lab we used Red Hat Ansible Automation Platform together with OpenShift Virtualization to automate a common day-2 task. We created a virtual machine configured with cloud-init to trust AAP's SSH key, then built a Project that pulls a playbook from Git, a dynamic Inventory that discovers the virtual machine from the OpenShift Virtualization API, and a Job Template that ties them together. Launching it patched the virtual machine, rebooted it, and left a verifiable record of the change.
+
+The same Project, Inventory and Job Template pattern scales from the single virtual machine used here to very large environments, and the playbook can be extended to perform any other task that you would otherwise do by hand. To learn more about the platform, please see the https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.7[Red Hat Ansible Automation Platform documentation^], or ask the proctors for the workshop.

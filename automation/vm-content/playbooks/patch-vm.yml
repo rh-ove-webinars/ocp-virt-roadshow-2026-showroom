@@ -1,5 +1,6 @@
 ---
-# Pre-built demo playbook launched from Automation Controller in Module 8 of the lab guide.
+# Pre-built demo playbook used by the "Automating VMs with Ansible Automation Platform"
+# module of the lab guide, which reproduces this file inline -- keep the two in sync.
 # Deliberately simple: update packages, reboot if the kernel changed, confirm the VM comes
 # back up, and leave visible proof of the change in /etc/motd.
 - name: Patch management demo - OpenShift Virtualization VM
