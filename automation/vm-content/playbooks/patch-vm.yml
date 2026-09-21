@@ -8,6 +8,12 @@
   become: true
   gather_facts: true
 
+  vars:
+    # Without pipelining Ansible forces a terminal for every sudo task, and recent Fedora
+    # announces sudo sessions on a terminal with escape sequences, which show up as
+    # "junk after the JSON data" warnings on every task.
+    ansible_ssh_pipelining: true
+
   tasks:
     - name: Update all packages
       ansible.builtin.dnf:

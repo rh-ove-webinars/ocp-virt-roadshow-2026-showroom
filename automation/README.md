@@ -111,6 +111,18 @@ Module 8, referencing these two credentials by name.
   their own project with `namespaces: [vmexamples-userN]` in the source variables, otherwise it
   also discovers the stopped, pre-staged VMs in `vmimported-userN`. This was only caught by
   running the whole attendee flow end to end against a live cluster.
+- **"Module invocation had junk after the JSON data" on every task.** Harmless, but noisy in
+  the job output attendees read. The "junk" is an invisible OSC 3008 terminal escape
+  sequence (`ESC ] 3008 ; end=<id> ESC \\`). Cause: Ansible's SSH plugin forces a terminal
+  (`-tt`) for every `become` task unless it is pipelining, and on Fedora 44 (systemd 259)
+  `pam_systemd` -- pulled into `sudo`'s session via `system-auth` -- announces a session on a
+  terminal with those sequences; the closing one arrives after the module's JSON. It is not
+  the shell profile and there is no documented off-switch. Fix: `ansible_ssh_pipelining: true`
+  as a play variable in `vm-content/playbooks/patch-vm.yml` (`ansible_ssh_use_tty: false` also
+  works). Reproduced with plain Ansible against the VM and in AAP's execution environment
+  (5 warnings on a small test play before, 0 after). AAP rejects this variable as an *ad-hoc*
+  extra var, so it has to live in the playbook. Any future playbook run with `become` against
+  Fedora 44+ guests will hit this again unless it sets the same variable.
 - **A `uri` module quirk that cost real debugging time:** a Jinja-templated integer nested
   inside a `body:` dict on an `ansible.builtin.uri` task gets re-stringified before being
   JSON-encoded (confirmed with `-vvv`; `| int` does not survive it). Most Controller API
