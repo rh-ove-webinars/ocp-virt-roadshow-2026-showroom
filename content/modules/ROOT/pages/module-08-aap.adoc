@@ -160,8 +160,8 @@ Before running any automation, it is worth reading what it will do to your machi
 ----
 ---
 # Pre-built demo playbook used by the "Automating VMs with Ansible Automation Platform"
-# module of the lab guide, which reproduces this file inline -- keep the two in sync.
-# Deliberately simple: update packages, reboot if the kernel changed, confirm the VM comes
+# module of the lab guide.
+# Tasks : update packages, reboot if the kernel changed, confirm the VM comes
 # back up, and leave visible proof of the change in /etc/motd.
 - name: Patch management demo - OpenShift Virtualization VM
   hosts: all
@@ -169,10 +169,6 @@ Before running any automation, it is worth reading what it will do to your machi
   gather_facts: true
 
   vars:
-    # Ansible forces a terminal for every sudo task, and recent Fedora announces sudo sessions
-    # on a terminal with escape sequences, which show up as "junk after the JSON data"
-    # warnings on every task. Don't allocate one. (Pipelining also avoids the terminal, but
-    # then lineinfile has to create its own temp directory and warns about that instead.)
     ansible_ssh_use_tty: false
 
   tasks:
@@ -223,7 +219,7 @@ Notice the following about how the playbook is put together:
 
 * *hosts: all* means the playbook runs against every host in whichever inventory it is launched with. We will launch it against an inventory that contains only our virtual machine.
 * *become: true* tells Ansible to run the tasks with administrative privileges (using `sudo`), which package updates and writing to `/etc` require.
-* *vars* sets a variable for the whole play. Here *ansible_ssh_use_tty* stops Ansible from allocating a terminal for every task, which on recent Fedora releases avoids noisy warnings in the job output about terminal escape sequences.
+* *vars* sets a variable for the whole play. Here *ansible_ssh_use_tty* tells Ansible not to allocate a terminal for the tasks in this play.
 * Each entry under *tasks* uses an Ansible module to describe a desired outcome rather than a script of commands: *dnf* updates the packages, *reboot* restarts the machine and waits for it to return, and *lineinfile* makes sure a line is present in a file, replacing any existing line that matches instead of adding another.
 * Some tasks only run *when* a condition is true. The playbook asks `dnf needs-restarting -r` whether the update requires a reboot and only reboots the virtual machine if it does.
 * Finally, the playbook writes a line to `/etc/motd` containing the date and the running kernel version. This leaves a visible record on the machine, which we will look for at the end of the module. Because the task replaces its own line from any earlier run, running the job again updates the banner instead of adding a second one.
