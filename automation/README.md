@@ -135,6 +135,21 @@ Module 8, referencing these two credentials by name.
 - **The `/etc/motd` task replaces its own line** (`lineinfile` with a `regexp`) instead of
   appending, so re-running the job updates one banner rather than accumulating a new
   timestamped line each time. Verified: two consecutive runs left exactly one line.
+- **The snapshot template works at a different layer, so it uses a different credential.**
+  `snapshot-vm.yml` runs with `connection: local` and creates a `VirtualMachineSnapshot`
+  through the OpenShift API using `kubernetes.core.k8s`; it never SSHes into the VM. Attendees
+  attach the existing per-org **OpenShift Access** credential to that Job Template (not *VM SSH
+  Key*), and AAP is expected to inject it as `K8S_AUTH_HOST` / `K8S_AUTH_API_KEY` /
+  `K8S_AUTH_VERIFY_SSL`, so the playbook contains no login code. Because that token is the
+  attendee's own OpenShift identity, they can only snapshot VMs in their own project. It gets the
+  VM name and project from the discovered inventory host (host name is `<project>-<vm>`; the
+  group `namespace_<project with _ for ->` holds the project), so nothing is typed in. **Not yet
+  verified on a live cluster** -- see the checklist in the change that introduced it.
+- **The patch playbook only updates the kernel**, to shorten the job attendees wait on (a full
+  `dnf` update of a fresh Fedora VM took roughly 6-8 minutes). A new kernel still makes
+  `dnf needs-restarting -r` return 1, so the reboot branch is still exercised. If the base image
+  already has the latest kernel, nothing changes and no reboot happens; the job still succeeds and
+  still writes the banner. The measured time is not recorded here yet.
 - **A `uri` module quirk that cost real debugging time:** a Jinja-templated integer nested
   inside a `body:` dict on an `ansible.builtin.uri` task gets re-stringified before being
   JSON-encoded (confirmed with `-vvv`; `| int` does not survive it). Most Controller API

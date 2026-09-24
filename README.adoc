@@ -24,7 +24,7 @@ These are the *eight* main sections that will be covered:
 
 * _Virtual Machine Management_: In this section we will provide a review of virtual machine management fundamentals, including creating a virtual machine, and modifying it's allotted resources.
 
-* _Automating VMs with Ansible Automation Platform_: In this section we will see how Red Hat Ansible Automation Platform and OpenShift Virtualization work together, by building a dynamic inventory that discovers a virtual machine and running a pre-built playbook against it to demonstrate automated patch management.
+* _Automating VMs with Ansible Automation Platform_: In this section we will see how Red Hat Ansible Automation Platform and OpenShift Virtualization work together, by building a dynamic inventory that discovers a virtual machine, taking a snapshot of it through the OpenShift API, and then running a pre-built playbook inside it to demonstrate automated patch management.
 
 * _Migrating Existing Virtual Machines_: In this section, we will use the Migration Toolkit for Virtualization (MTV) to migrate virtual machines from an existing VMware vSphere environment to OpenShift Virtualization.
 

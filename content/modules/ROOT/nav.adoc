@@ -15,10 +15,11 @@
 ** xref:module-08-aap.adoc#explore_aap[Explore Your Pre-Configured Organization]
 ** xref:module-08-aap.adoc#create_vm[Create a Virtual Machine for This Exercise]
 ** xref:module-08-aap.adoc#create_project[Create a Project in AAP]
-** xref:module-08-aap.adoc#view_playbook[Take a Look at the Playbook]
+** xref:module-08-aap.adoc#view_playbook[Take a Look at the Playbooks]
 ** xref:module-08-aap.adoc#create_inventory[Create a Dynamic Inventory Using OpenShift Credentials]
 ** xref:module-08-aap.adoc#discover_vm[Sync the Inventory and Discover Your VM]
-** xref:module-08-aap.adoc#create_template[Create and Launch a Job Template]
+** xref:module-08-aap.adoc#snapshot_vm[Snapshot the Virtual Machine Before Patching]
+** xref:module-08-aap.adoc#create_template[Create and Launch the Patch Job Template]
 ** xref:module-08-aap.adoc#verify[Verify the Patch]
 ** xref:module-08-aap.adoc#cleanup[Cleanup]
 

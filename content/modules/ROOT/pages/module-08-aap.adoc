@@ -1,7 +1,8 @@
 = Automating VMs with Ansible Automation Platform
 
-// The playbook shown in the "Take a Look at the Playbook" section is a copy of
-// automation/vm-content/playbooks/patch-vm.yml -- if you change one, change the other.
+// The playbooks shown in the "Take a Look at the Playbooks" section are copies of
+// automation/vm-content/playbooks/snapshot-vm.yml and patch-vm.yml -- if you change one, change the other.
+// Screenshots still to capture: 28_AAP_Snapshot_Template, 29_AAP_Snapshot_Job_Output, 30_virt_Snapshots.
 
 == Introduction
 
@@ -9,15 +10,18 @@ Once a virtual machine has been created, most of the work of keeping it healthy 
 
 https://www.redhat.com/en/technologies/management/ansible[*Red Hat Ansible Automation Platform*^] (AAP) is Red Hat's enterprise automation platform. It runs Ansible playbooks against sets of hosts, stores the credentials needed to reach them, and gives teams a shared place to build, launch and audit that automation. Because OpenShift Virtualization virtual machines are described by the same Kubernetes API as everything else in the cluster, AAP can also discover them automatically, so the list of machines to automate never has to be maintained by hand.
 
-In this portion of the lab, we will build a small automation pipeline in AAP ourselves and use it to patch a virtual machine. You will create a new virtual machine, then in AAP you will create a *Project* that holds the playbook, a dynamic *Inventory* that discovers the VM, and a *Job Template* that ties them together, and finally launch it.
+Automating a virtual machine happens at two layers. The first is the virtualization layer, where OpenShift Virtualization manages the virtual machine itself, for example by taking a snapshot of it, and which is controlled through the OpenShift API. The second is inside the guest operating system, where updates are installed and configuration is changed. Ansible can drive both, and in this module we will use each of them.
+
+In this portion of the lab, we will build a small automation pipeline in AAP ourselves and use it to protect and then patch a virtual machine. You will create a new virtual machine, then in AAP you will create a *Project* that holds the playbooks, a dynamic *Inventory* that discovers the VM, and two *Job Templates*: one that takes a snapshot of the virtual machine, and one that patches it. You will launch them in that order.
 
 .*Goals*
 
 * Create a virtual machine that is ready to be managed by Ansible using cloud-init
-* Create an AAP Project that pulls a playbook from a Git repository
-* Review the playbook that will patch the virtual machine
+* Create an AAP Project that pulls playbooks from a Git repository
+* Review the playbooks that will snapshot and patch the virtual machine
 * Create a dynamic Inventory that discovers OpenShift Virtualization VMs using OpenShift credentials
-* Create and launch a Job Template
+* Create and launch a Job Template that snapshots the virtual machine through the OpenShift API
+* Create and launch a Job Template that patches the virtual machine over SSH
 * Verify that the automation changed the virtual machine
 
 NOTE: Your AAP organization and user, along with two credentials named *VM SSH Key* and *OpenShift Access*, have already been created for you, so that you do not have to copy private keys or API tokens by hand. Everything else in this module you will build yourself.
@@ -131,7 +135,7 @@ image::2026_summer/module-08-aap/24_VM_Running.png[link=self, window=blank, widt
 [[create_project]]
 == Create a Project in AAP
 
-An AAP *Project* is a synchronized copy of a source-controlled repository, typically Git, which holds playbooks and other automation content. Keeping automation in source control means it can be reviewed, versioned and shared like any other code. Let's create a Project that points to the repository this lab is built from, which also contains the playbook we will use.
+An AAP *Project* is a synchronized copy of a source-controlled repository, typically Git, which holds playbooks and other automation content. Keeping automation in source control means it can be reviewed, versioned and shared like any other code. Let's create a Project that points to the repository this lab is built from, which also contains the playbooks we will use.
 
 . Return to the AAP console, click on *Automation Execution* in the left-side menu and then *Projects*, and click on the *Create project* button.
 +
@@ -152,16 +156,74 @@ image::2026_summer/module-08-aap/12_AAP_Create_Project.png[link=self, window=bla
 image::2026_summer/module-08-aap/13_AAP_Project_Sync.png[link=self, window=blank, width=100%]
 
 [[view_playbook]]
-== Take a Look at the Playbook
+== Take a Look at the Playbooks
 
-Before running any automation, it is worth reading what it will do to your machines. The repository your Project just synchronized contains a playbook called *patch-vm.yml*, which is shown below in full.
+Before running any automation, it is worth reading what it will do to your machines. The repository your Project just synchronized contains two playbooks, one for each layer: *snapshot-vm.yml* talks to OpenShift, and *patch-vm.yml* logs in to the virtual machine. Both are shown below in full.
+
+=== The Snapshot Playbook
 
 [source,yaml]
 ----
 ---
 # Pre-built demo playbook used by the "Automating VMs with Ansible Automation Platform"
 # module of the lab guide.
-# Tasks : update packages, reboot if the kernel changed, confirm the VM comes
+# Tasks : ask OpenShift to take a snapshot of each virtual machine in the inventory,
+# and wait until the snapshot is ready.
+- name: Snapshot demo - OpenShift Virtualization VM
+  hosts: all
+  connection: local
+  gather_facts: false
+
+  vars:
+    vm_namespace: "{{ group_names | select('match', '^namespace_') | first | regex_replace('^namespace_', '') | replace('_', '-') }}"
+    vm_name: "{{ inventory_hostname | regex_replace('^' ~ vm_namespace ~ '-', '') }}"
+
+  tasks:
+    - name: Take a snapshot of the virtual machine
+      kubernetes.core.k8s:
+        state: present
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+        definition:
+          apiVersion: snapshot.kubevirt.io/v1beta1
+          kind: VirtualMachineSnapshot
+          metadata:
+            name: "{{ vm_name }}-pre-patch-{{ now(utc=true).strftime('%Y%m%d-%H%M%S') }}"
+            namespace: "{{ vm_namespace }}"
+          spec:
+            source:
+              apiGroup: kubevirt.io
+              kind: VirtualMachine
+              name: "{{ vm_name }}"
+      register: snapshot
+
+    - name: Show the snapshot that was created
+      ansible.builtin.debug:
+        msg:
+          - "Virtual machine: {{ vm_namespace }}/{{ vm_name }}"
+          - "Snapshot: {{ snapshot.result.metadata.name }}"
+          - "Ready to use: {{ snapshot.result.status.readyToUse | default('unknown') }}"
+----
+
+Notice the following about how the playbook is put together:
+
+* *hosts: all* means the playbook runs against every host in whichever inventory it is launched with, which in our case is the virtual machine that AAP discovers.
+* *connection: local* means that Ansible does not log in to the virtual machine. The tasks run where the job runs, and talk to the OpenShift API from there.
+* *vars* works out the project and the name of the virtual machine from what the inventory discovered: the name of the host is the project followed by the virtual machine name, and the group that starts with *namespace_* holds the project name. Nothing has to be typed in.
+* The task uses the *kubernetes.core.k8s* module to create a *VirtualMachineSnapshot*, which is the same object that is created when you take a snapshot from the OpenShift console, and then waits until it is *Ready*. The name of the snapshot includes the time, so every run creates a new one.
+* The playbook needs no login details of its own. AAP passes the *OpenShift Access* credential to the job, so it can only snapshot virtual machines that your own OpenShift user can see.
+
+=== The Patch Playbook
+
+[source,yaml]
+----
+---
+# Pre-built demo playbook used by the "Automating VMs with Ansible Automation Platform"
+# module of the lab guide.
+# Tasks : update the kernel, reboot if a new kernel was installed, confirm the VM comes
 # back up, and leave visible proof of the change in /etc/motd.
 - name: Patch management demo - OpenShift Virtualization VM
   hosts: all
@@ -172,9 +234,9 @@ Before running any automation, it is worth reading what it will do to your machi
     ansible_ssh_use_tty: false
 
   tasks:
-    - name: Update all packages
+    - name: Update the kernel
       ansible.builtin.dnf:
-        name: "*"
+        name: kernel
         state: latest
       register: dnf_update
 
@@ -210,7 +272,7 @@ Before running any automation, it is worth reading what it will do to your machi
       ansible.builtin.debug:
         msg:
           - "Host: {{ inventory_hostname }}"
-          - "Packages updated: {{ dnf_update.changed }}"
+          - "Kernel updated: {{ dnf_update.changed }}"
           - "Reboot performed: {{ needs_restart.rc == 1 }}"
           - "Kernel now running: {{ ansible_kernel }}"
 ----
@@ -220,7 +282,7 @@ Notice the following about how the playbook is put together:
 * *hosts: all* means the playbook runs against every host in whichever inventory it is launched with. We will launch it against an inventory that contains only our virtual machine.
 * *become: true* tells Ansible to run the tasks with administrative privileges (using `sudo`), which package updates and writing to `/etc` require.
 * *vars* sets a variable for the whole play. Here *ansible_ssh_use_tty* tells Ansible not to allocate a terminal for the tasks in this play.
-* Each entry under *tasks* uses an Ansible module to describe a desired outcome rather than a script of commands: *dnf* updates the packages, *reboot* restarts the machine and waits for it to return, and *lineinfile* makes sure a line is present in a file, replacing any existing line that matches instead of adding another.
+* Each entry under *tasks* uses an Ansible module to describe a desired outcome rather than a script of commands: *dnf* installs the latest kernel, *reboot* restarts the machine and waits for it to return, and *lineinfile* makes sure a line is present in a file, replacing any existing line that matches instead of adding another. To keep the job short in this lab only the kernel is updated. The same task with `name: "*"` would update every package.
 * Some tasks only run *when* a condition is true. The playbook asks `dnf needs-restarting -r` whether the update requires a reboot and only reboots the virtual machine if it does.
 * Finally, the playbook writes a line to `/etc/motd` containing the date and the running kernel version. This leaves a visible record on the machine, which we will look for at the end of the module. Because the task replaces its own line from any earlier run, running the job again updates the banner instead of adding a second one.
 
@@ -286,10 +348,40 @@ image::2026_summer/module-08-aap/20_AAP_Inventory_Groups.png[link=self, window=b
 
 The same mechanism works when there are hundreds of virtual machines. As machines are created or removed in OpenShift, syncing the inventory picks up the change with no manual inventory management.
 
-[[create_template]]
-== Create and Launch a Job Template
+[[snapshot_vm]]
+== Snapshot the Virtual Machine Before Patching
 
-We now have a Project that contains a playbook, an Inventory that contains our virtual machine, and a credential that can log in to it. A *Job Template* ties those pieces together into something that can be launched, and re-launched, on demand.
+Before changing anything on the virtual machine, it is good practice to take a snapshot, so that there is something to return to if the update goes wrong. The snapshot is a job like any other, but it works at the virtualization layer: instead of logging in to the virtual machine, it asks OpenShift Virtualization to take the snapshot.
+
+. Click on *Automation Execution* in the left-side menu and then *Templates*, and click on the *Create template* button and select *Create job template*.
+
+. Fill in the following values, and when finished click on the *Create job template* button.
++
+* *Name:* Snapshot My VM
+* *Job type:* Run
+* *Inventory:* My VMs
+* *Project:* Roadshow Automation
+* *Playbook:* automation/vm-content/playbooks/snapshot-vm.yml
+* *Credentials:* open the dropdown and select *OpenShift Access | OpenShift or Kubernetes API Bearer Token*
++
+NOTE: This template uses a different credential from the one we will use to patch the virtual machine, because it works at a different layer. It never logs in to the virtual machine, so it does not need *VM SSH Key*. It talks to the OpenShift API, so it needs *OpenShift Access*.
++
+//image::2026_summer/module-08-aap/28_AAP_Snapshot_Template.png[link=self, window=blank, width=100%]
+
+. AAP opens the *Details* page of the new template. Click on the *Launch template* button and wait until the job finishes with a status of *Success*. The output ends with the name of the snapshot that was created.
++
+//image::2026_summer/module-08-aap/29_AAP_Snapshot_Job_Output.png[link=self, window=blank, width=100%]
+
+. Now look at the same virtual machine from the OpenShift console. Click on *Virtualization -> VirtualMachines*, select the *ansible-demo* virtual machine, and click on the *Snapshots* tab. The snapshot that Ansible just took is listed, and its status is *Succeeded*.
++
+NOTE: You will look at snapshots in more detail, including how to restore one, in the *Storage Management* module.
++
+//image::2026_summer/module-08-aap/30_virt_Snapshots.png[link=self, window=blank, width=100%]
+
+[[create_template]]
+== Create and Launch the Patch Job Template
+
+With a snapshot in place, we can patch the virtual machine. This second Job Template works at the other layer: it uses the credential that can log in to the virtual machine, together with the Project and the Inventory, to run the patch playbook.
 
 . Click on *Automation Execution* in the left-side menu and then *Templates*, and click on the *Create template* button and select *Create job template*.
 +
@@ -304,7 +396,7 @@ image::2026_summer/module-08-aap/21_AAP_Templates_init.png[link=self, window=bla
 * *Playbook:* automation/vm-content/playbooks/patch-vm.yml
 * *Credentials:* open the dropdown, which lists both of your credentials one after the other, and select *VM SSH Key | Machine*
 +
-NOTE: Each entry in the dropdown shows the name of the credential followed by its type. Select only *VM SSH Key | Machine*, which is what AAP uses to log in to the virtual machine. The *OpenShift Access* credential is used by the inventory to discover the virtual machine, so it is not needed here.
+NOTE: Each entry in the dropdown shows the name of the credential followed by its type. Select only *VM SSH Key | Machine*, which is what AAP uses to log in to the virtual machine. The *OpenShift Access* credential is not needed here, because this template never talks to the OpenShift API.
 +
 image::2026_summer/module-08-aap/22_AAP_Templates.png[link=self, window=blank, width=100%]
 
@@ -314,7 +406,9 @@ image::2026_summer/module-08-aap/23_AAP_Templates_Job_Launch.png[link=self, wind
 
 . You will be taken to the output of the running job, where you can follow the playbook task by task. Wait until the job finishes with a status of *Success*. At the bottom of the output, the *PLAY RECAP* should show *unreachable=0* and *failed=0* for your virtual machine.
 +
-NOTE: This will take about six minutes. A newly created virtual machine has many updates waiting, and the playbook then reboots it, so the output will appear to stop on the *Reboot the VM* task while the virtual machine restarts. This is expected.
+NOTE: This will take a few minutes. If a newer kernel is available, the playbook installs it and then reboots the virtual machine, so the output will appear to stop on the *Reboot the VM* task while the virtual machine restarts. This is expected. If the virtual machine already has the latest kernel, nothing is installed and it is not rebooted.
++
+// TODO: state the measured job time here once the kernel-only job has been timed on a live cluster.
 +
 image::2026_summer/module-08-aap/25_Job_Output.png[link=self, window=blank, width=100%]
 
@@ -345,7 +439,7 @@ image::2026_summer/module-08-aap/27_Motd.png[link=self, window=blank, width=100%
 
 . Hit *Ctrl-D* twice to log out of the virtual machine.
 
-This confirms that AAP logged in to the virtual machine, applied the updates, rebooted it, and recorded the result, all from a job that you configured and launched yourself.
+This confirms that AAP logged in to the virtual machine, updated it, and recorded the result, all from a job that you configured and launched yourself.
 
 [[cleanup]]
 == Cleanup
@@ -357,8 +451,10 @@ To save resources for the next lab, please stop the virtual machine that you cre
 
 Now the *ansible-demo* virtual machine should be in *Stopped* state.
 
+NOTE: The snapshot that you took is small, but if you do not want to keep it you can delete it from the *Snapshots* tab of the virtual machine.
+
 == Summary
 
-In this section of our lab we used Red Hat Ansible Automation Platform together with OpenShift Virtualization to automate a common day-2 task. We created a virtual machine configured with cloud-init to trust AAP's SSH key, then built a Project that pulls a playbook from Git, a dynamic Inventory that discovers the virtual machine from the OpenShift Virtualization API, and a Job Template that ties them together. Launching it patched the virtual machine, rebooted it, and left a verifiable record of the change.
+In this section of our lab we used Red Hat Ansible Automation Platform together with OpenShift Virtualization to automate a common day-2 task at two layers. We created a virtual machine configured with cloud-init to trust AAP's SSH key, then built a Project that pulls two playbooks from Git, a dynamic Inventory that discovers the virtual machine from the OpenShift Virtualization API, and two Job Templates. The first asked OpenShift Virtualization to snapshot the virtual machine, and the second logged in to it and installed a kernel update. Launching them in that order left us with a snapshot to return to, and a patched virtual machine with a verifiable record of the change.
 
-The same Project, Inventory and Job Template pattern scales from the single virtual machine used here to very large environments, and the playbook can be extended to perform any other task that you would otherwise do by hand. To learn more about the platform, please see the https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.7[Red Hat Ansible Automation Platform documentation^], or ask the proctors for the workshop.
+The same Project, Inventory and Job Template pattern scales from the single virtual machine used here to very large environments, and the playbooks can be extended to perform any other task that you would otherwise do by hand. To learn more about the platform, please see the https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.7[Red Hat Ansible Automation Platform documentation^], or ask the proctors for the workshop.

@@ -1,0 +1,42 @@
+---
+# Pre-built demo playbook used by the "Automating VMs with Ansible Automation Platform"
+# module of the lab guide.
+# Tasks : ask OpenShift to take a snapshot of each virtual machine in the inventory,
+# and wait until the snapshot is ready.
+- name: Snapshot demo - OpenShift Virtualization VM
+  hosts: all
+  connection: local
+  gather_facts: false
+
+  vars:
+    vm_namespace: "{{ group_names | select('match', '^namespace_') | first | regex_replace('^namespace_', '') | replace('_', '-') }}"
+    vm_name: "{{ inventory_hostname | regex_replace('^' ~ vm_namespace ~ '-', '') }}"
+
+  tasks:
+    - name: Take a snapshot of the virtual machine
+      kubernetes.core.k8s:
+        state: present
+        wait: true
+        wait_condition:
+          type: Ready
+          status: "True"
+        wait_timeout: 300
+        definition:
+          apiVersion: snapshot.kubevirt.io/v1beta1
+          kind: VirtualMachineSnapshot
+          metadata:
+            name: "{{ vm_name }}-pre-patch-{{ now(utc=true).strftime('%Y%m%d-%H%M%S') }}"
+            namespace: "{{ vm_namespace }}"
+          spec:
+            source:
+              apiGroup: kubevirt.io
+              kind: VirtualMachine
+              name: "{{ vm_name }}"
+      register: snapshot
+
+    - name: Show the snapshot that was created
+      ansible.builtin.debug:
+        msg:
+          - "Virtual machine: {{ vm_namespace }}/{{ vm_name }}"
+          - "Snapshot: {{ snapshot.result.metadata.name }}"
+          - "Ready to use: {{ snapshot.result.status.readyToUse | default('unknown') }}"

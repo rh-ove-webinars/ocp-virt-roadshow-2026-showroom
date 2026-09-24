@@ -1,7 +1,7 @@
 ---
 # Pre-built demo playbook used by the "Automating VMs with Ansible Automation Platform"
 # module of the lab guide.
-# Tasks : update packages, reboot if the kernel changed, confirm the VM comes
+# Tasks : update the kernel, reboot if a new kernel was installed, confirm the VM comes
 # back up, and leave visible proof of the change in /etc/motd.
 - name: Patch management demo - OpenShift Virtualization VM
   hosts: all
@@ -12,9 +12,9 @@
     ansible_ssh_use_tty: false
 
   tasks:
-    - name: Update all packages
+    - name: Update the kernel
       ansible.builtin.dnf:
-        name: "*"
+        name: kernel
         state: latest
       register: dnf_update
 
@@ -50,6 +50,6 @@
       ansible.builtin.debug:
         msg:
           - "Host: {{ inventory_hostname }}"
-          - "Packages updated: {{ dnf_update.changed }}"
+          - "Kernel updated: {{ dnf_update.changed }}"
           - "Reboot performed: {{ needs_restart.rc == 1 }}"
           - "Kernel now running: {{ ansible_kernel }}"
