@@ -30,3 +30,8 @@ aap_ssh_public_key_path: "{{ aap_ssh_keypair_dir }}/aap_lab_id_rsa.pub"
 # NOT set here. Pass it at run time, e.g.:
 #   ansible-playbook configure-controller.yml -e lab_password=Sup3rSecret --ask-vault-pass
 # or store it in an ansible-vault encrypted group_vars/vault.yml and gitignore that file too.
+
+# Lifetime of the OpenShift token stored in each attendee's "OpenShift Access" credential.
+# Issued through a dedicated OAuthClient, so it is independent of the cluster-wide default.
+aap_oauth_client_name: aap-lab
+aap_token_lifetime_seconds: 604800   # 7 days

@@ -162,15 +162,19 @@ Module 8, referencing these two credentials by name.
 - **No ServiceAccounts/RBAC to manage.** Attendees' namespaces (`vmexamples-userN`) don't
   exist until they run Module 1 of the lab, so this can't pre-create namespace-scoped RBAC.
   Instead, each org's Kubernetes credential is an OAuth token minted by logging in *as that
-  attendee* (`oc login -u userN -p <lab_password>`) -- which works even before their
+  attendee* (logging in with `userN` and `lab_password`) -- which works even before their
   namespace exists, since login/identity is independent of it. This also means each
   attendee's dynamic inventory (which they build themselves in Module 8) can only ever
   discover what that attendee's own account can see -- free per-user isolation, nothing to
   lock down manually.
-- **Token lifetime.** These OAuth tokens expire per the cluster's
-  `accessTokenMaxAgeSeconds` OAuth setting (often 24h by default on RHDP clusters). If the
-  cluster is provisioned well ahead of the event, re-run `configure-controller.yml` shortly
-  before it starts to refresh every attendee's token.
+- **Token lifetime.** Tokens from `oc login` use the built-in client and expire after the
+  cluster-wide default (24h), which is too short. `configure-controller.yml` therefore creates
+  a dedicated `OAuthClient` (`aap-lab`, `respondWithChallenges: true`) whose own
+  `accessTokenMaxAgeSeconds` is `aap_token_lifetime_seconds` (default 7 days, set in
+  `group_vars/all.yml`), and requests each attendee's token from it with a basic-auth call to
+  `/oauth/authorize?response_type=token`. The playbook asserts that the returned `expires_in`
+  matches. Change the value with `-e aap_token_lifetime_seconds=2592000` (30 days). Re-running
+  the playbook issues fresh tokens. **Not yet run on a live cluster.**
 - **SSH key injection is done via cloud-init at VM-create time**, not by editing an
   already-running VM's SSH configuration -- an earlier draft of Module 8 relied on OpenShift
   Virtualization's SSH-public-key-injection feature for an already-running VM, but that

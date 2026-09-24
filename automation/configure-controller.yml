@@ -86,37 +86,64 @@
     # --- One OAuth token per attendee, from their own OpenShift identity ----------------
     # This works even though attendees' namespaces (vmexamples-userN) don't exist yet --
     # identity/login is independent of the namespaces that identity will later create.
-    - name: Determine the cluster API URL from the current oc context
-      ansible.builtin.command: oc whoami --show-server
-      changed_when: false
-      register: ocp_api_server
+    # Tokens from `oc login` use the built-in client and expire after the cluster-wide default
+    # (often 24h). A dedicated OAuthClient can carry its own accessTokenMaxAgeSeconds, so tokens
+    # requested through it live as long as aap_token_lifetime_seconds.
+    - name: Find the cluster's OAuth server route
+      kubernetes.core.k8s_info:
+        api_version: route.openshift.io/v1
+        kind: Route
+        namespace: openshift-authentication
+        name: oauth-openshift
+      register: oauth_route
 
-    - name: Obtain each attendee's own OAuth token (isolated kubeconfigs; admin session untouched)
-      block:
-        - name: Log in as each attendee
-          ansible.builtin.command: >
-            oc login {{ ocp_api_server.stdout }} -u {{ item }} -p {{ lab_password }}
-            --kubeconfig=/tmp/aap-lab-kubeconfig-{{ item }} --insecure-skip-tls-verify=true
-          loop: "{{ lab_users }}"
-          changed_when: false
-          no_log: true
+    - name: Set the OAuth server host
+      ansible.builtin.set_fact:
+        oauth_host: "{{ oauth_route.resources[0].spec.host }}"
 
-        - name: Read each attendee's token
-          ansible.builtin.command: oc whoami -t --kubeconfig=/tmp/aap-lab-kubeconfig-{{ item }}
-          loop: "{{ lab_users }}"
-          changed_when: false
-          no_log: true
-          register: ocp_user_tokens
-      always:
-        - name: Remove the temporary per-attendee kubeconfigs
-          ansible.builtin.file:
-            path: "/tmp/aap-lab-kubeconfig-{{ item }}"
-            state: absent
-          loop: "{{ lab_users }}"
+    - name: Create an OAuth client that issues long-lived tokens
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: oauth.openshift.io/v1
+          kind: OAuthClient
+          metadata:
+            name: "{{ aap_oauth_client_name }}"
+          grantMethod: auto
+          respondWithChallenges: true
+          accessTokenMaxAgeSeconds: "{{ aap_token_lifetime_seconds | int }}"
+          redirectURIs:
+            - "https://{{ oauth_host }}/oauth/token/implicit"
+
+    - name: Request a long-lived token as each attendee
+      ansible.builtin.uri:
+        url: "https://{{ oauth_host }}/oauth/authorize?client_id={{ aap_oauth_client_name }}&response_type=token"
+        url_username: "{{ item }}"
+        url_password: "{{ lab_password }}"
+        force_basic_auth: true
+        headers:
+          X-CSRF-Token: "1"
+        follow_redirects: none
+        validate_certs: false
+        status_code: 302
+      loop: "{{ lab_users }}"
+      register: ocp_user_tokens
+      no_log: true
+
+    - name: Check that every token was issued with the requested lifetime
+      ansible.builtin.assert:
+        that:
+          - "'access_token=' in item.location"
+          - "(item.location | regex_search('expires_in=([0-9]+)', '\\1') | first | int) >= (aap_token_lifetime_seconds | int) - 60"
+        fail_msg: "{{ item.item }}: OAuth server did not return a token with the requested lifetime"
+        quiet: true
+      loop: "{{ ocp_user_tokens.results }}"
+      loop_control:
+        label: "{{ item.item }}"
 
     - name: Map attendee usernames to their OAuth tokens
       ansible.builtin.set_fact:
-        ocp_user_token_map: "{{ dict(lab_users | zip(ocp_user_tokens.results | map(attribute='stdout'))) }}"
+        ocp_user_token_map: "{{ dict(lab_users | zip(ocp_user_tokens.results | map(attribute='location') | map('regex_search', 'access_token=([^&]+)', '\\1') | map('first'))) }}"
       no_log: true
 
     # --- Gateway-level lookups (looked up once, reused for all 20 orgs) -----------------
