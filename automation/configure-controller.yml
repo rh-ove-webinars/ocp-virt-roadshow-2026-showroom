@@ -89,6 +89,10 @@
     # Tokens from `oc login` use the built-in client and expire after the cluster-wide default
     # (often 24h). A dedicated OAuthClient can carry its own accessTokenMaxAgeSeconds, so tokens
     # requested through it live as long as aap_token_lifetime_seconds.
+    - name: Determine the cluster API URL from the current oc context
+      ansible.builtin.command: oc whoami --show-server
+      changed_when: false
+      register: ocp_api_server
     - name: Find the cluster's OAuth server route
       kubernetes.core.k8s_info:
         api_version: route.openshift.io/v1
@@ -102,18 +106,22 @@
         oauth_host: "{{ oauth_route.resources[0].spec.host }}"
 
     - name: Create an OAuth client that issues long-lived tokens
+      # accessTokenMaxAgeSeconds must be a real JSON integer -- the k8s API rejects it as a
+      # string, and templating it as a plain YAML dict leaf stringifies it (same quirk as the
+      # credential-association `uri` call below). Build the definition as JSON text via
+      # `to_json` instead, so the int renders unquoted; the k8s module accepts a JSON string.
       kubernetes.core.k8s:
         state: present
-        definition:
-          apiVersion: oauth.openshift.io/v1
-          kind: OAuthClient
-          metadata:
-            name: "{{ aap_oauth_client_name }}"
-          grantMethod: auto
-          respondWithChallenges: true
-          accessTokenMaxAgeSeconds: "{{ aap_token_lifetime_seconds | int }}"
-          redirectURIs:
-            - "https://{{ oauth_host }}/oauth/token/implicit"
+        definition: >-
+          {{ {
+            "apiVersion": "oauth.openshift.io/v1",
+            "kind": "OAuthClient",
+            "metadata": {"name": aap_oauth_client_name},
+            "grantMethod": "auto",
+            "respondWithChallenges": true,
+            "accessTokenMaxAgeSeconds": aap_token_lifetime_seconds | int,
+            "redirectURIs": ["https://" ~ oauth_host ~ "/oauth/token/implicit"]
+          } | to_json }}
 
     - name: Request a long-lived token as each attendee
       ansible.builtin.uri:
@@ -131,10 +139,13 @@
       no_log: true
 
     - name: Check that every token was issued with the requested lifetime
+      # regex_search's backreference-group argument needs its own backslash escaping that's
+      # awkward to get right through both YAML and Jinja string literals -- simpler to match
+      # the whole "expires_in=<digits>" token (no group) and strip the known prefix instead.
       ansible.builtin.assert:
         that:
           - "'access_token=' in item.location"
-          - "(item.location | regex_search('expires_in=([0-9]+)', '\\1') | first | int) >= (aap_token_lifetime_seconds | int) - 60"
+          - "(item.location | regex_search('expires_in=[0-9]+') | regex_replace('^expires_in=', '') | int) >= (aap_token_lifetime_seconds | int) - 60"
         fail_msg: "{{ item.item }}: OAuth server did not return a token with the requested lifetime"
         quiet: true
       loop: "{{ ocp_user_tokens.results }}"
@@ -143,7 +154,7 @@
 
     - name: Map attendee usernames to their OAuth tokens
       ansible.builtin.set_fact:
-        ocp_user_token_map: "{{ dict(lab_users | zip(ocp_user_tokens.results | map(attribute='location') | map('regex_search', 'access_token=([^&]+)', '\\1') | map('first'))) }}"
+        ocp_user_token_map: "{{ dict(lab_users | zip(ocp_user_tokens.results | map(attribute='location') | map('regex_search', 'access_token=[^&]+') | map('regex_replace', '^access_token=', ''))) }}"
       no_log: true
 
     # --- Gateway-level lookups (looked up once, reused for all 20 orgs) -----------------
