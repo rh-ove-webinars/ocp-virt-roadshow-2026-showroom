@@ -410,9 +410,7 @@ image::2026_summer/module-08-aap/23_AAP_Templates_Job_Launch.png[link=self, wind
 
 . You will be taken to the output of the running job, where you can follow the playbook task by task. Wait until the job finishes with a status of *Success*. At the bottom of the output, the *PLAY RECAP* should show *unreachable=0* and *failed=0* for your virtual machine.
 +
-NOTE: This will take a few minutes. If a newer kernel is available, the playbook installs it and then reboots the virtual machine, so the output will appear to stop on the *Reboot the VM* task while the virtual machine restarts. This is expected. If the virtual machine already has the latest kernel, nothing is installed and it is not rebooted.
-+
-// TODO: state the measured job time here once the kernel-only job has been timed on a live cluster.
+NOTE: This takes about four minutes. If a newer kernel is available, the playbook installs it and then reboots the virtual machine, so the output will appear to stop on the *Reboot the VM* task while the virtual machine restarts. This is expected. If the virtual machine already has the latest kernel, nothing is installed and it is not rebooted, and the job finishes in well under a minute.
 +
 image::2026_summer/module-08-aap/25_Job_Output.png[link=self, window=blank, width=100%]
 

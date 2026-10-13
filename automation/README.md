@@ -187,7 +187,9 @@ Module 8, referencing these two credentials by name.
   `kernel-core` and `kernel-modules-core`, never a package literally named `kernel`. Updating
   those two instead works and still makes `dnf needs-restarting -r` return 1, so the reboot
   branch is still exercised. If the base image already has the latest kernel, nothing changes and
-  no reboot happens; the job still succeeds and still writes the banner.
+  no reboot happens; the job still succeeds and still writes the banner. Measured live, full run
+  including the reboot and reconnect: 247 seconds (about 4 minutes), down from the 6-8 minutes a
+  full `dnf` update took.
 - **A `uri` module quirk that cost real debugging time:** a Jinja-templated integer nested
   inside a `body:` dict on an `ansible.builtin.uri` task gets re-stringified before being
   JSON-encoded (confirmed with `-vvv`; `| int` does not survive it). Most Controller API
