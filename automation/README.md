@@ -111,6 +111,39 @@ Module 8, referencing these two credentials by name.
   their own project with `namespaces: [vmexamples-userN]` in the source variables, otherwise it
   also discovers the stopped, pre-staged VMs in `vmimported-userN`. This was only caught by
   running the whole attendee flow end to end against a live cluster.
+- **`namespaces` alone also discovers `fedora01`, confirmed live.** Module 8 runs right after
+  *Virtual Machine Management*, which leaves a VM named `fedora01` in the same
+  `vmexamples-userN` project. Reproduced on `cluster-w8h8j`: creating both `fedora01` (no
+  customization, as Module 1 does) and `ansible-demo` (with the AAP key, as Module 8 does) and
+  syncing an inventory scoped only by `namespaces` discovered both hosts.
+- **`label_selector` in the source variables looked like the fix, but is not reliable --
+  don't use it.** The console's "From template" flow does label every VM it creates
+  `app: <vm name>`, and scoping the source with `label_selector: app=ansible-demo` did drop
+  the host count from 2 to 1 on first sync. But that label lives only on the `VirtualMachine`
+  object's own metadata, not on `spec.template.metadata` (confirmed on both the console-created
+  staged VMs and a manually-applied one). The inventory source's `label_selector` is applied
+  against the `VirtualMachineInstance`, which kubevirt builds fresh from `spec.template` every
+  time it is recreated (restart, live migration, node drain) -- it does **not** inherit the
+  VM's own label. Reproduced live after an infrastructure-caused VM restart: the VM-level query
+  still matched and kept the host in the inventory, but the per-host VMI merge silently returned
+  nothing, so `ansible_host` and every `vmi_*` variable disappeared with no error in the sync
+  log, and the next patch job failed with an SSH timeout against the stale cached IP.
+  AAP's `host_filter` field does not help either -- it filters a host's gathered
+  `ansible_facts`, not the `variables` an inventory *source* populates, so any filter expression
+  against `vm_labels` or the host's own name matched zero hosts (tried several Django-lookup
+  spellings; all returned `count: 0`, while clearing `host_filter` immediately brought the hosts
+  back, confirming the PATCH itself was fine).
+- **The actual fix: leave the source scoped only by `namespaces`, and set each Job Template's
+  own `Limit` field** to the exact discovered host name (`vmexamples-userN-ansible-demo`).
+  `Limit` is a plain AAP job-launch feature that matches on the host's *name* in the inventory,
+  which is stable (`<project>-<vm>`, set once by the inventory source and never touched by VMI
+  churn) -- unlike a label on a short-lived VMI. Confirmed live: with `label_selector` removed
+  and `Limit` set on the job template instead, the inventory still lists both `fedora01` and
+  `ansible-demo`, but the job only ever targets `ansible-demo`. (A stale host from a *previous*
+  sync is not removed by a later sync unless the source's `overwrite` option is also on; that
+  option was left on for this verification work since source variables were being changed
+  between syncs, but it is irrelevant for an attendee's first, clean sync, which is the only one
+  the module walks them through.)
 - **Warnings in the patch job's output, and why `ansible_ssh_use_tty: false`.** Two different
   warnings are tangled together here; the playbook avoids both.
   1. *"Module invocation had junk after the JSON data"* on every task. The "junk" is an
@@ -143,13 +176,18 @@ Module 8, referencing these two credentials by name.
   `K8S_AUTH_VERIFY_SSL`, so the playbook contains no login code. Because that token is the
   attendee's own OpenShift identity, they can only snapshot VMs in their own project. It gets the
   VM name and project from the discovered inventory host (host name is `<project>-<vm>`; the
-  group `namespace_<project with _ for ->` holds the project), so nothing is typed in. **Not yet
-  verified on a live cluster** -- see the checklist in the change that introduced it.
-- **The patch playbook only updates the kernel**, to shorten the job attendees wait on (a full
-  `dnf` update of a fresh Fedora VM took roughly 6-8 minutes). A new kernel still makes
-  `dnf needs-restarting -r` return 1, so the reboot branch is still exercised. If the base image
-  already has the latest kernel, nothing changes and no reboot happens; the job still succeeds and
-  still writes the banner. The measured time is not recorded here yet.
+  group `namespace_<project with _ for ->` holds the project), so nothing is typed in. Verified
+  live as an unprivileged attendee (`user1`, not admin): RBAC, credential injection
+  (`K8S_AUTH_*`), and the `snapshot.kubevirt.io/v1beta1` API all worked with no changes needed;
+  the job completed in 65 seconds.
+- **The patch playbook updates `kernel-core`/`kernel-modules-core`, not `kernel`**, to shorten
+  the job attendees wait on (a full `dnf` update of a fresh Fedora VM took roughly 6-8 minutes).
+  `name: kernel` fails outright on this Fedora cloud image with "Packages for argument 'kernel'
+  available, but not installed" -- confirmed live by SSHing in directly: the image ships
+  `kernel-core` and `kernel-modules-core`, never a package literally named `kernel`. Updating
+  those two instead works and still makes `dnf needs-restarting -r` return 1, so the reboot
+  branch is still exercised. If the base image already has the latest kernel, nothing changes and
+  no reboot happens; the job still succeeds and still writes the banner.
 - **A `uri` module quirk that cost real debugging time:** a Jinja-templated integer nested
   inside a `body:` dict on an `ansible.builtin.uri` task gets re-stringified before being
   JSON-encoded (confirmed with `-vvv`; `| int` does not survive it). Most Controller API

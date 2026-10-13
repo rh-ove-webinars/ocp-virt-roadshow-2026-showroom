@@ -14,7 +14,9 @@
   tasks:
     - name: Update the kernel
       ansible.builtin.dnf:
-        name: kernel
+        name:
+          - kernel-core
+          - kernel-modules-core
         state: latest
       register: dnf_update
 
