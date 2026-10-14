@@ -21,21 +21,19 @@ Your login is available with:
 * *Password:* {password}
 
 [[create_project]]
-== Create a New Project
+== Select Your Project
 
 . When you first log in, you will be placed in the *Core Platform* perspective, with an introductory prompt. Click the *Skip tour* button to close the window.
 +
 image::2026_spring/module-01-intro/00_Welcome_Message.png[link=self, window=blank, width=100%]
 
-. You will be presented with a page that shows all of the projects that your user currently has access to. On this page we will create a new project that will work as our working area for the remainder of this workshop. Click on the *Create Project* button in the upper right corner.
+. You will be presented with a page that shows all of the projects that your user currently has access to. A project named *vmexamples-{user}* has already been created for you; this is the working area we will use for the remainder of this workshop. Find it in the list and select it.
 +
 image::2026_spring/module-01-intro/01_Create_Project.png[link=self, window=blank, width=100%]
-
-. A box will pop up which will give you the opportunity to name this new project, name the project *vmexamples-{user}* and click the *Create* button.
 +
-image::2026_spring/module-01-intro/02_Create_Project_Name.png[link=self, window=blank, width=100%]
+NOTE: Your lab account does not have permission to create new projects, so if you click a *Create Project* button elsewhere in the console it will fail with a *Forbidden* error. That is expected; always use the pre-created *vmexamples-{user}* project for this workshop instead.
 +
-IMPORTANT: While the lab guide is designed to be dynamically updated to show your user name correctly, the screenshots are all static images showing *user1*. Please make sure that you name your project after your assigned user for the workshop that is reflected in your lab guide text.
+IMPORTANT: While the lab guide is designed to be dynamically updated to show your user name correctly, the screenshots are all static images showing *user1*. Please make sure that you select the project matching your assigned user for the workshop that is reflected in your lab guide text.
 
 [[virt_perspective]]
 == Switch to the Virtualization Perspective
