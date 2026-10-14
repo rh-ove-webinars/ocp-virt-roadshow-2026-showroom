@@ -369,17 +369,17 @@ Before changing anything on the virtual machine, it is good practice to take a s
 +
 NOTE: This template uses a different credential from the one we will use to patch the virtual machine, because it works at a different layer. It never logs in to the virtual machine, so it does not need *VM SSH Key*. It talks to the OpenShift API, so it needs *OpenShift Access*. The *Limit* field restricts which host in the inventory this template runs against; without it, the job would also try to snapshot *fedora01*.
 +
-//image::2026_summer/module-08-aap/28_AAP_Snapshot_Template.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/28_AAP_Snapshot_Template.png[link=self, window=blank, width=100%]
 
 . AAP opens the *Details* page of the new template. Click on the *Launch template* button and wait until the job finishes with a status of *Success*. The output ends with the name of the snapshot that was created.
 +
-//image::2026_summer/module-08-aap/29_AAP_Snapshot_Job_Output.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/29_AAP_Snapshot_Job_Output.png[link=self, window=blank, width=100%]
 
 . Now look at the same virtual machine from the OpenShift console. Click on *Virtualization -> VirtualMachines*, select the *ansible-demo* virtual machine, and click on the *Snapshots* tab. The snapshot that Ansible just took is listed, and its status is *Succeeded*.
 +
 NOTE: You will look at snapshots in more detail, including how to restore one, in the *Storage Management* module.
 +
-//image::2026_summer/module-08-aap/30_virt_Snapshots.png[link=self, window=blank, width=100%]
+image::2026_summer/module-08-aap/30_virt_Snapshots.png[link=self, window=blank, width=100%]
 
 [[create_template]]
 == Create and Launch the Patch Job Template
