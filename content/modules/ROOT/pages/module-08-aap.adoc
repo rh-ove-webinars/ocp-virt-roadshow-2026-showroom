@@ -18,8 +18,8 @@ In this portion of the lab, we will build a small automation pipeline in AAP our
 
 * Create a virtual machine that is ready to be managed by Ansible using cloud-init
 * Create an AAP Project that pulls playbooks from a Git repository
-* Review the playbooks that will snapshot and patch the virtual machine
 * Create a dynamic Inventory that discovers OpenShift Virtualization VMs using OpenShift credentials
+* Review the playbooks that will snapshot and patch the virtual machine
 * Create and launch a Job Template that snapshots the virtual machine through the OpenShift API
 * Create and launch a Job Template that patches the virtual machine over SSH
 * Verify that the automation changed the virtual machine
@@ -154,6 +154,66 @@ image::2026_summer/module-08-aap/12_AAP_Create_Project.png[link=self, window=bla
 . AAP opens the *Details* page of the new Project and immediately synchronizes the repository. Wait until the *Last job status* changes to *Success*.
 +
 image::2026_summer/module-08-aap/13_AAP_Project_Sync.png[link=self, window=blank, width=100%]
+
+[[create_inventory]]
+== Create a Dynamic Inventory Using OpenShift Credentials
+
+An AAP *Inventory* is the list of hosts that automation runs against. Rather than typing in the name and address of our virtual machine by hand, we will have AAP discover it from the OpenShift Virtualization API, so that the inventory stays correct as virtual machines come and go.
+
+. Click on *Automation Execution* in the left-side menu, then *Infrastructure*, then *Inventories*, and click on the *Create inventory* button and select *Create inventory*.
++
+image::2026_summer/module-08-aap/14_AAP_Inventory_init.png[link=self, window=blank, width=100%]
+
+. Fill in the following values, and when finished click on the *Create inventory* button.
++
+* *Name:* My VMs
+* *Organization:* {user}
++
+image::2026_summer/module-08-aap/15_AAP_Inventory.png[link=self, window=blank, width=100%]
+
+. On the inventory that was just created, click on the *Sources* tab and then the *Create source* button.
++
+image::2026_summer/module-08-aap/16_AAP_Inventory_Source_init.png[link=self, window=blank, width=100%]
+
+. Fill in the following values, and leave all of the other settings at their defaults:
++
+* *Name:* OpenShift Virtualization VMs
+* *Source:* Supported OpenShift Virtualization
+* *Credential:* OpenShift Access
+* *Source variables:* add the following, which limits the discovery to your own project:
++
+[source,yaml,role=execute,subs="attributes+"]
+----
+namespaces:
+  - vmexamples-{user}
+----
++
+The *Supported OpenShift Virtualization* source type is built in to AAP and supported by Red Hat. It uses the *OpenShift Access* credential to query the OpenShift API and turns virtual machines into Ansible hosts, with no inventory file to maintain. Since it uses your credential, it can only ever see the virtual machines that your own OpenShift user can see.
++
+NOTE: `vmexamples-{user}` is the project where you created your virtual machine in this module. It is a different project from `vmimported-{user}`, where the three stopped virtual machines from the *Virtual Machine Management* module live, so those are never discovered here. Your project does, however, still contain *fedora01* from that same earlier module -- the next section shows both virtual machines appearing in the inventory, and the step after that shows how each Job Template targets only the one it needs.
++
+image::2026_summer/module-08-aap/17_AAP_Inventory_Source.png[link=self, window=blank, width=100%]
+
+. Click on the *Create source* button to save it. AAP opens the *Details* page of the new source.
+
+[[discover_vm]]
+== Sync the Inventory and Discover Your VM
+
+. On the *Details* page of the source, click on the *Sync inventory source* button. The synchronization only takes a few seconds.
++
+image::2026_summer/module-08-aap/18_AAP_Inventory_Source_sync.png[link=self, window=blank, width=100%]
+
+. Click on *My VMs* in the breadcrumb at the top of the page to return to the inventory, and then click on the *Hosts* tab. You should see two hosts: *vmexamples-{user}-ansible-demo*, the virtual machine this module created, and *vmexamples-{user}-fedora01*, left over from the *Virtual Machine Management* module. AAP discovered both automatically from the OpenShift Virtualization API. Click on *vmexamples-{user}-ansible-demo* to see its details, including the IP address that AAP found for it in the *ansible_host* variable.
++
+NOTE: If there are no hosts, or a host has no IP address, the virtual machine has not finished booting and reporting its network address yet. Wait a minute, and then click on *Sync inventory source* again.
++
+image::2026_summer/module-08-aap/19_AAP_Inventory_Hosts.png[link=self, window=blank, width=100%]
+
+. Click on the *Groups* tab. The synchronization also created groups for you, one for the cluster and one for your project, named *namespace_vmexamples_{user}*, which contains your virtual machine. Groups make it possible to run automation against a subset of the hosts in an inventory.
++
+image::2026_summer/module-08-aap/20_AAP_Inventory_Groups.png[link=self, window=blank, width=100%]
+
+The same mechanism works when there are hundreds of virtual machines. As machines are created or removed in OpenShift, syncing the inventory picks up the change with no manual inventory management.
 
 [[view_playbook]]
 == Take a Look at the Playbooks
@@ -290,66 +350,6 @@ Notice the following about how the playbook is put together:
 
 This is a deliberately simple example, but the pattern of updating, conditionally rebooting, verifying and reporting is the same one that is used to patch a fleet of hundreds of machines. Only the size of the inventory changes.
 
-[[create_inventory]]
-== Create a Dynamic Inventory Using OpenShift Credentials
-
-An AAP *Inventory* is the list of hosts that automation runs against. Rather than typing in the name and address of our virtual machine by hand, we will have AAP discover it from the OpenShift Virtualization API, so that the inventory stays correct as virtual machines come and go.
-
-. Click on *Automation Execution* in the left-side menu, then *Infrastructure*, then *Inventories*, and click on the *Create inventory* button and select *Create inventory*.
-+
-image::2026_summer/module-08-aap/14_AAP_Inventory_init.png[link=self, window=blank, width=100%]
-
-. Fill in the following values, and when finished click on the *Create inventory* button.
-+
-* *Name:* My VMs
-* *Organization:* {user}
-+
-image::2026_summer/module-08-aap/15_AAP_Inventory.png[link=self, window=blank, width=100%]
-
-. On the inventory that was just created, click on the *Sources* tab and then the *Create source* button.
-+
-image::2026_summer/module-08-aap/16_AAP_Inventory_Source_init.png[link=self, window=blank, width=100%]
-
-. Fill in the following values, and leave all of the other settings at their defaults:
-+
-* *Name:* OpenShift Virtualization VMs
-* *Source:* Supported OpenShift Virtualization
-* *Credential:* OpenShift Access
-* *Source variables:* add the following, which limits the discovery to your own project:
-+
-[source,yaml,role=execute,subs="attributes+"]
-----
-namespaces:
-  - vmexamples-{user}
-----
-+
-The *Supported OpenShift Virtualization* source type is built in to AAP and supported by Red Hat. It uses the *OpenShift Access* credential to query the OpenShift API and turns virtual machines into Ansible hosts, with no inventory file to maintain. Since it uses your credential, it can only ever see the virtual machines that your own OpenShift user can see.
-+
-NOTE: `vmexamples-{user}` is the project where you created your virtual machine in this module. It is a different project from `vmimported-{user}`, where the three stopped virtual machines from the *Virtual Machine Management* module live, so those are never discovered here. Your project does, however, still contain *fedora01* from that same earlier module -- the next section shows both virtual machines appearing in the inventory, and the step after that shows how each Job Template targets only the one it needs.
-+
-image::2026_summer/module-08-aap/17_AAP_Inventory_Source.png[link=self, window=blank, width=100%]
-
-. Click on the *Create source* button to save it. AAP opens the *Details* page of the new source.
-
-[[discover_vm]]
-== Sync the Inventory and Discover Your VM
-
-. On the *Details* page of the source, click on the *Sync inventory source* button. The synchronization only takes a few seconds.
-+
-image::2026_summer/module-08-aap/18_AAP_Inventory_Source_sync.png[link=self, window=blank, width=100%]
-
-. Click on *My VMs* in the breadcrumb at the top of the page to return to the inventory, and then click on the *Hosts* tab. You should see two hosts: *vmexamples-{user}-ansible-demo*, the virtual machine this module created, and *vmexamples-{user}-fedora01*, left over from the *Virtual Machine Management* module. AAP discovered both automatically from the OpenShift Virtualization API. Click on *vmexamples-{user}-ansible-demo* to see its details, including the IP address that AAP found for it in the *ansible_host* variable.
-+
-NOTE: If there are no hosts, or a host has no IP address, the virtual machine has not finished booting and reporting its network address yet. Wait a minute, and then click on *Sync inventory source* again.
-+
-image::2026_summer/module-08-aap/19_AAP_Inventory_Hosts.png[link=self, window=blank, width=100%]
-
-. Click on the *Groups* tab. The synchronization also created groups for you, one for the cluster and one for your project, named *namespace_vmexamples_{user}*, which contains your virtual machine. Groups make it possible to run automation against a subset of the hosts in an inventory.
-+
-image::2026_summer/module-08-aap/20_AAP_Inventory_Groups.png[link=self, window=blank, width=100%]
-
-The same mechanism works when there are hundreds of virtual machines. As machines are created or removed in OpenShift, syncing the inventory picks up the change with no manual inventory management.
-
 [[snapshot_vm]]
 == Snapshot the Virtual Machine Before Patching
 
@@ -372,6 +372,8 @@ NOTE: This template uses a different credential from the one we will use to patc
 image::2026_summer/module-08-aap/28_AAP_Snapshot_Template.png[link=self, window=blank, width=100%]
 
 . AAP opens the *Details* page of the new template. Click on the *Launch template* button and wait until the job finishes with a status of *Success*. The output ends with the name of the snapshot that was created.
++
+image::2026_summer/module-08-aap/28_AAP_Snapshot_Template-Launch.png[link=self, window=blank, width=100%]
 +
 image::2026_summer/module-08-aap/29_AAP_Snapshot_Job_Output.png[link=self, window=blank, width=100%]
 
