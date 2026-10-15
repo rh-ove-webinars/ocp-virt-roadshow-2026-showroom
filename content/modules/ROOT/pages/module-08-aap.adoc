@@ -2,7 +2,6 @@
 
 // The playbooks shown in the "Take a Look at the Playbooks" section are copies of
 // automation/vm-content/playbooks/snapshot-vm.yml and patch-vm.yml -- if you change one, change the other.
-// Screenshots still to capture: 28_AAP_Snapshot_Template, 29_AAP_Snapshot_Job_Output, 30_virt_Snapshots.
 
 == Introduction
 
