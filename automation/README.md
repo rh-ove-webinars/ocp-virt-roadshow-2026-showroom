@@ -66,6 +66,48 @@ provisioning created in the `showroom-userN` namespaces.
 up automatically. `configure-controller.yml` also generates a lab-wide SSH keypair into
 `.generated/` the first time it runs, which `fixup-showroom-deployments.sh` then reads.
 
+## Live progress dashboard (during the event)
+
+`check-progress.py` is a standalone, read-only polling tool for use *during* a live session
+(not Ansible, not part of the setup flow above) that tells you how many attendees have
+finished Module 1 and Module 8, across one or more clusters at once -- useful for timing a
+demo capsule you want to run once most of the room has caught up.
+
+It looks for two signals per attendee, both required by default, that the platforms record
+on their own (no attendee self-reporting, no guessing from current VM power state):
+
+- **Module 1 done:** a `VirtualMachineInstanceMigration` for VM *fedora01* with
+  `status.phase: Succeeded` exists in `vmexamples-<user>` -- the last interactive step of
+  Module 1 before its Summary.
+- **Module 8 done:** a successful AAP Job named *Patch My VM* has run for that attendee's
+  Organization -- the last interactive step of Module 8 before Verify/Cleanup.
+
+```console
+pip install kubernetes requests pyyaml   # if not already installed
+
+# Log in to each cluster once, giving each context a stable name:
+oc login https://api.cluster1.example.com:6443 -u admin ...
+oc config rename-context $(oc config current-context) cluster1
+oc login https://api.cluster2.example.com:6443 -u admin ...
+oc config rename-context $(oc config current-context) cluster2
+
+cp progress-clusters.yml.example .generated/progress-clusters.yml
+# edit .generated/progress-clusters.yml: the kubecontext name per cluster, and each
+# cluster's own aap_host/aap_admin_password (same values configure-controller.yml used for
+# that cluster -- see its own .generated/controller-connection.yml, copied out before
+# install-aap.yml overwrote it for the next cluster).
+
+./check-progress.py                        # loops, refreshing every 30s, Ctrl-C to stop
+./check-progress.py --once                 # single pass, then exit
+./check-progress.py --interval 15 --target 60
+```
+
+Verified live on `cluster-w8h8j`: a real completed "Patch My VM" job from earlier testing
+was correctly attributed to its organization (`user1`), and a throwaway VM named *fedora01*
+with a real successful live migration was correctly picked up as the Module 1 signal for the
+same user -- combining to report that one attendee as done, cleanly distinguished from the
+other 19.
+
 **Changing `aap_operator_channel` on an existing install:** patching the Subscription's
 `spec.channel` in place does **not** reliably make OLM jump to the new channel's CSV (AAP's
 channels aren't necessarily one continuous replaces-chain) -- it can just sit at

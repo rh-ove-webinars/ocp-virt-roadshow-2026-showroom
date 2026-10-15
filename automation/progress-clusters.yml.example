@@ -1,0 +1,26 @@
+# Copy this to .generated/progress-clusters.yml (gitignored) and fill in real values.
+# Never commit real cluster hostnames/passwords -- that directory is gitignored for exactly
+# this reason.
+#
+# kubecontext: the name of this cluster's context in your local kubeconfig. Log in to each
+# cluster once before running check-progress.py, then give its context a stable name:
+#   oc login https://api.cluster1.example.com:6443 -u admin ...
+#   oc config rename-context $(oc config current-context) cluster1
+#
+# aap_host / aap_admin_password: same values used for configure-controller.yml on that
+# cluster -- see that cluster's own automation/.generated/controller-connection.yml
+# (written by install-aap.yml; copy the values out before running install-aap.yml again
+# against a different cluster, since that file gets overwritten each time).
+
+clusters:
+  - name: cluster1
+    kubecontext: cluster1
+    aap_host: "https://aap-aap.apps.cluster1.example.com"
+    aap_admin_password: "CHANGE_ME"
+  - name: cluster2
+    kubecontext: cluster2
+    aap_host: "https://aap-aap.apps.cluster2.example.com"
+    aap_admin_password: "CHANGE_ME"
+
+lab_user_count: 20
+lab_user_prefix: user
