@@ -1,0 +1,161 @@
+---
+# One-time (but idempotent) setup: if this cluster's worker nodes have heterogeneous physical
+# CPUs, set a cluster-wide default CPU model for VMs so that live migration (Module 1) works
+# between any pair of worker nodes, instead of only between nodes with an identical CPU.
+#
+# Background, reproduced live on cluster-w8h8j: every VM defaults to cpu.model: host-model,
+# which pins it to the exact CPU feature set of whichever node it started on, and live migration
+# then requires the target node to match that *exact* feature set. 1 of that cluster's 4 workers
+# was a different CPU generation (AMD EPYC-Milan) than the other 3 (EPYC-Rome); any VM landing on
+# that one node failed live migration with NoSuitableNodesForHostModelMigration -- roughly 1 in 4
+# attendees, at random, through no fault of their own.
+#
+# The fix: HyperConverged.spec.defaultCPUModel lets every VM use one named CPU model instead of
+# host-model. This playbook picks the *oldest* of the CPU models actually present on the workers
+# (the one with the fewest cpu-feature.node.kubevirt.io/* labels on its own node), after
+# confirming every worker's own cpu-model-migration.node.kubevirt.io/<model> labels show it can
+# actually emulate that model -- i.e. it only ever picks a baseline already proven safe on every
+# node, never an arbitrary or unrelated one. On a cluster where every worker already reports the
+# same CPU model, it leaves defaultCPUModel untouched (host-model is already optimal there --
+# nothing to fix).
+#
+# Run any time after OpenShift Virtualization is installed and before attendees start Module 1,
+# e.g. right after install-aap.yml (needs no AAP, only a cluster-admin kubeconfig):
+#   ansible-playbook fixup-cpu-baseline.yml
+#
+- name: Set a cluster default CPU model if worker nodes are heterogeneous
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Get all worker nodes and their labels
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Node
+        label_selectors:
+          - node-role.kubernetes.io/worker
+      register: worker_nodes
+
+    - name: Fail fast if no worker nodes were found
+      ansible.builtin.assert:
+        that: worker_nodes.resources | length > 0
+        fail_msg: "No nodes matched node-role.kubernetes.io/worker -- check kubeconfig/context."
+
+    - name: Work out each node's own detected host-model CPU and its migration-compatible models
+      ansible.builtin.set_fact:
+        node_cpu_info: >-
+          {{ node_cpu_info | default([]) + [{
+            'name': item.metadata.name,
+            'host_model': (item.metadata.labels
+                            | dict2items
+                            | selectattr('key', 'match', '^host-model-cpu\.node\.kubevirt\.io/')
+                            | map(attribute='key')
+                            | map('regex_replace', '^host-model-cpu\.node\.kubevirt\.io/', '')
+                            | list | first | default('')),
+            'feature_count': (item.metadata.labels
+                               | dict2items
+                               | selectattr('key', 'match', '^cpu-feature\.node\.kubevirt\.io/')
+                               | list | length),
+            'migration_models': (item.metadata.labels
+                                  | dict2items
+                                  | selectattr('key', 'match', '^cpu-model-migration\.node\.kubevirt\.io/')
+                                  | map(attribute='key')
+                                  | map('regex_replace', '^cpu-model-migration\.node\.kubevirt\.io/', '')
+                                  | list)
+          }] }}
+      loop: "{{ worker_nodes.resources }}"
+      loop_control:
+        label: "{{ item.metadata.name }}"
+
+    - name: Fail if any worker node has no host-model-cpu label (node-labeller not ready yet)
+      ansible.builtin.assert:
+        that: node_cpu_info | selectattr('host_model', 'equalto', '') | list | length == 0
+        fail_msg: >-
+          Some worker nodes have no host-model-cpu.node.kubevirt.io/* label yet -- the KubeVirt
+          node-labeller may still be starting up. Wait a minute and re-run.
+
+    - name: Report what was found on each node
+      ansible.builtin.debug:
+        msg: "{{ item.name }}: host model = {{ item.host_model }}, {{ item.feature_count }} CPU features"
+      loop: "{{ node_cpu_info }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Nothing to do -- every worker already reports the same CPU model
+      ansible.builtin.meta: end_play
+      when: (node_cpu_info | map(attribute='host_model') | unique | list | length) <= 1
+
+    - name: Compute the set of models every single worker node can emulate
+      ansible.builtin.set_fact:
+        common_migration_models: "{{ common_migration_models | default(node_cpu_info[0].migration_models) | intersect(item.migration_models) }}"
+      loop: "{{ node_cpu_info }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Candidate baselines -- an actually-present host model that every node can also emulate
+      ansible.builtin.set_fact:
+        baseline_candidates: "{{ node_cpu_info | selectattr('host_model', 'in', common_migration_models) | list }}"
+
+    - name: Fail loudly if the nodes are too different to share any common CPU model
+      ansible.builtin.fail:
+        msg: >-
+          Worker nodes have heterogeneous CPUs
+          ({{ node_cpu_info | map(attribute='host_model') | unique | join(', ') }})
+          with no model that every node can emulate in common. This needs a different fix (e.g.
+          separating node pools, or excluding the odd node from VM scheduling) --
+          defaultCPUModel cannot safely resolve it. Not changing anything.
+      when: baseline_candidates | length == 0
+
+    - name: Pick the baseline with the fewest CPU features (the oldest/safest common denominator)
+      ansible.builtin.set_fact:
+        chosen_baseline: "{{ (baseline_candidates | sort(attribute='feature_count')) [0].host_model }}"
+
+    - name: Get the current HyperConverged CR
+      kubernetes.core.k8s_info:
+        api_version: hco.kubevirt.io/v1beta1
+        kind: HyperConverged
+        name: kubevirt-hyperconverged
+        namespace: openshift-cnv
+      register: hco
+
+    - name: "Report: heterogeneous CPUs found, chosen baseline"
+      ansible.builtin.debug:
+        msg: >-
+          Worker CPUs: {{ node_cpu_info | map(attribute='host_model') | unique | join(', ') }}.
+          Chosen baseline: {{ chosen_baseline }}.
+          Current defaultCPUModel: {{ hco.resources[0].spec.defaultCPUModel | default('(unset, host-model)') }}.
+
+    - name: Set HyperConverged.spec.defaultCPUModel to the chosen baseline
+      kubernetes.core.k8s:
+        api_version: hco.kubevirt.io/v1beta1
+        kind: HyperConverged
+        name: kubevirt-hyperconverged
+        namespace: openshift-cnv
+        state: patched
+        definition:
+          spec:
+            defaultCPUModel: "{{ chosen_baseline }}"
+      when: hco.resources[0].spec.defaultCPUModel | default('') != chosen_baseline
+      register: hco_patch
+
+    - name: Wait for HyperConverged to finish reconciling, if it was changed
+      kubernetes.core.k8s_info:
+        api_version: hco.kubevirt.io/v1beta1
+        kind: HyperConverged
+        name: kubevirt-hyperconverged
+        namespace: openshift-cnv
+      register: hco_status
+      until: >-
+        (hco_status.resources[0].status.conditions | selectattr('type', 'equalto', 'Available') | map(attribute='status') | first) == 'True'
+        and (hco_status.resources[0].status.conditions | selectattr('type', 'equalto', 'Progressing') | map(attribute='status') | first) == 'False'
+      retries: 24
+      delay: 10
+      when: hco_patch is changed
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: >-
+          {{ ('Set defaultCPUModel to ' ~ chosen_baseline ~ ' (was unset or different). New VMs created from now on will use it; VMs created before this change are unaffected.')
+             if hco_patch is changed
+             else ('defaultCPUModel is already correctly set to ' ~ chosen_baseline ~ ' -- nothing to do.') }}

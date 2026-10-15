@@ -32,6 +32,12 @@ deadlock, wire in the two new Antora attributes Module 8 needs) -- see step 3 be
 ## Run it
 
 ```console
+# 0. If this cluster's worker nodes have heterogeneous physical CPUs, set a cluster-wide
+#    default CPU model so live migration (Module 1) works between any pair of workers. Safe
+#    to run on every fresh cluster -- it is a no-op if the workers all match. Needs only a
+#    cluster-admin kubeconfig (no AAP, no attendees yet); run it any time before Module 1.
+ansible-playbook fixup-cpu-baseline.yml
+
 # 1. Install AAP (gateway + Controller only; EDA/Hub/Lightspeed disabled to keep the
 #    footprint small on a cluster that's also running ODF and 20 attendees' VMs).
 ansible-playbook install-aap.yml
@@ -49,7 +55,7 @@ ansible-playbook configure-controller.yml -e lab_password='<the shared OCP lab p
 ./fixup-showroom-deployments.sh
 ```
 
-Or run steps 1-2 in sequence with `ansible-playbook site.yml -e lab_password=...` (still
+Or run steps 0-2 in sequence with `ansible-playbook site.yml -e lab_password=...` (still
 needs `lab_password` passed explicitly; nothing here should ever hardcode real lab
 credentials into a committed file). Step 3 is a separate shell script, not part of `site.yml`,
 since it isn't Ansible-Automation-Platform-specific -- it just patches whatever RHDP's own
@@ -90,6 +96,25 @@ Module 8, referencing these two credentials by name.
 
 ## Design notes / things to double check on the real cluster
 
+- **Heterogeneous worker CPUs break live migration for whoever's VM lands on the odd node --
+  `fixup-cpu-baseline.yml` fixes it.** Reproduced live on `cluster-w8h8j`: 1 of 4 workers was a
+  different physical CPU generation (AMD EPYC-Milan) than the other 3 (EPYC-Rome). VMs default
+  to `cpu.model: host-model`, which pins them to the *exact* CPU feature set of whichever node
+  they started on; live migration then requires an exact match on the target too. A VM that
+  happened to land on the Milan node failed Module 1's live-migration step every time, with
+  `NoSuitableNodesForHostModelMigration` -- roughly 1 in 4 attendees, at random, through no
+  fault of their own. This is an RHDP node-pool provisioning fact, not something content editing
+  can fix. The playbook reads every worker's `host-model-cpu.node.kubevirt.io/<model>` and
+  `cpu-model-migration.node.kubevirt.io/<model>` labels, and if the workers disagree on CPU
+  model, sets `HyperConverged.spec.defaultCPUModel` to whichever of the actually-present models
+  every node can also emulate (confirmed via those migration-compat labels), preferring the one
+  with the fewest `cpu-feature.node.kubevirt.io/*` labels (the oldest/safest common
+  denominator) if more than one qualifies. Confirmed live: on `cluster-w8h8j` it picked
+  `EPYC-Rome`; a VM forced onto the Milan node, then migrated with no node pin, succeeded in
+  about 15 seconds (previously: failure after ~200s stuck in `Scheduling`). It is a no-op on a
+  cluster where every worker already reports the same model. **Only affects VMs created after
+  it runs** -- it does not touch already-running VMs (they keep whatever CPU model they were
+  created with), so run it before attendees start Module 1, not mid-event.
 - **Gateway vs. Controller API.** AAP 2.5+ centralizes auth/RBAC (Organizations, Users,
   Teams, role assignments) in the gateway (`/api/gateway/v1/...`). Controller-specific
   objects (Credentials, Projects, Inventories, Job Templates) still live in Controller, but
