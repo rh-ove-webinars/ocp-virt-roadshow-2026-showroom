@@ -78,7 +78,7 @@ image::2026_summer/module-08-aap/05_virt_Overview.png[link=self, window=blank, w
 
 . Click on *VirtualMachines* in the left-side menu, then click on the *Create* button and select *From template*.
 +
-NOTE: Do not be concerned that *vmexamples-{user}* is not shown in the center column of this page. Projects that do not contain any virtual machines yet are hidden there by default. The project that you selected at the top of the page is the one that is used, and it is shown in the *Summary*.
+NOTE: Do not be concerned that *vmexamples-{user}* is not shown in the center column of this page. Projects that do not contain any virtual machines yet are hidden there by default. The project that you selected at the top of the page is the one that is used, and it is shown in the *Summary*. If you would like to see it listed anyway, toggle off *Show only projects with VirtualMachines* above the project tree.
 +
 image::2026_summer/module-08-aap/06_virt_Create_Template.png[link=self, window=blank, width=100%]
 
