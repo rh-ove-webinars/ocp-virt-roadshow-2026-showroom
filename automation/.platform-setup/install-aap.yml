@@ -127,13 +127,13 @@
 
     - name: Ensure the generated-secrets directory exists
       ansible.builtin.file:
-        path: "{{ playbook_dir }}/.generated"
+        path: "{{ playbook_dir }}/../.generated"
         state: directory
         mode: "0700"
 
     - name: Save connection details for configure-controller.yml to pick up automatically
       ansible.builtin.copy:
-        dest: "{{ playbook_dir }}/.generated/controller-connection.yml"
+        dest: "{{ playbook_dir }}/../.generated/controller-connection.yml"
         mode: "0600"
         content: |
           ---

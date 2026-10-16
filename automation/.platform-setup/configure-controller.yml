@@ -38,12 +38,12 @@
   tasks:
     - name: Check for connection details saved by install-aap.yml
       ansible.builtin.stat:
-        path: "{{ playbook_dir }}/.generated/controller-connection.yml"
+        path: "{{ playbook_dir }}/../.generated/controller-connection.yml"
       register: _saved_connection
 
     - name: Load connection details saved by install-aap.yml, if present and not overridden
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/.generated/controller-connection.yml"
+        file: "{{ playbook_dir }}/../.generated/controller-connection.yml"
       when: _saved_connection.stat.exists and (aap_host is not defined or aap_admin_password is not defined)
 
     - name: Require required run-time variables
@@ -193,7 +193,7 @@
 
     # --- Per-attendee Organization / User / Role / Credentials / Project / Inventory / JT -
     - name: Configure each attendee's organization, user and credentials
-      ansible.builtin.include_tasks: tasks/configure_user.yml
+      ansible.builtin.include_tasks: ../tasks/configure_user.yml
       loop: "{{ lab_users }}"
       loop_control:
         label: "{{ item }}"

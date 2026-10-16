@@ -22,7 +22,7 @@ aap_content_playbook_path: "automation/vm-content/playbooks/patch-vm.yml"
 # Shared SSH keypair used for every org's Machine credential. Generated once by
 # configure-controller.yml if it doesn't already exist, and gitignored -- never commit
 # real key material.
-aap_ssh_keypair_dir: "{{ playbook_dir }}/.generated"
+aap_ssh_keypair_dir: "{{ playbook_dir }}/../.generated"
 aap_ssh_private_key_path: "{{ aap_ssh_keypair_dir }}/aap_lab_id_rsa"
 aap_ssh_public_key_path: "{{ aap_ssh_keypair_dir }}/aap_lab_id_rsa.pub"
 

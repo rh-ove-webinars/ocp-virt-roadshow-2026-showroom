@@ -31,7 +31,22 @@ deadlock, wire in the two new Antora attributes Module 8 needs) -- see step 3 be
 
 ## Run it
 
+These four playbooks (`fixup-cpu-baseline.yml`, `install-aap.yml`, `configure-controller.yml`,
+`site.yml`) live under `.platform-setup/`, not directly in `automation/`. That's deliberate,
+not incidental: every attendee's AAP Project points its SCM URL at this whole repo (see
+`content/modules/ROOT/pages/module-08-aap.adoc`), and Controller's Job Template "Playbook"
+dropdown lists *every* `.yml`/`.yaml` file anywhere in a synced Project that merely looks like
+a playbook (has a `hosts:`/`include:`/`import_playbook:` line) -- it does not know or care
+which ones are meant for attendees. Dot-directories are the one thing Controller's scan always
+skips (confirmed by reading `Project.playbooks`/`skip_directory()` straight off the running
+`aap-controller-task` pod's source), so that's where these go. `tasks/` and `group_vars/` are
+skipped the same way, for the same reason. Keep any future instructor-only playbook under
+`.platform-setup/` too; only `vm-content/playbooks/*.yml` should ever sit somewhere Controller's
+scan can reach.
+
 ```console
+cd .platform-setup/
+
 # 0. If this cluster's worker nodes have heterogeneous physical CPUs, set a cluster-wide
 #    default CPU model so live migration (Module 1) works between any pair of workers. Safe
 #    to run on every fresh cluster -- it is a no-op if the workers all match. Needs only a
@@ -52,14 +67,14 @@ ansible-playbook configure-controller.yml -e lab_password='<the shared OCP lab p
 #    fix a rollout deadlock, and wire in {aap_console_url}/{aap_ssh_pubkey}. Must run AFTER
 #    steps 1 and 2 (it reads the AAP route and the SSH key configure-controller.yml
 #    generated). See the script's own header comment for exactly what it does and why.
-./fixup-showroom-deployments.sh
+cd .. && ./fixup-showroom-deployments.sh
 ```
 
-Or run steps 0-2 in sequence with `ansible-playbook site.yml -e lab_password=...` (still
-needs `lab_password` passed explicitly; nothing here should ever hardcode real lab
-credentials into a committed file). Step 3 is a separate shell script, not part of `site.yml`,
-since it isn't Ansible-Automation-Platform-specific -- it just patches whatever RHDP's own
-provisioning created in the `showroom-userN` namespaces.
+Or run steps 0-2 in sequence with `ansible-playbook site.yml -e lab_password=...` (from inside
+`.platform-setup/`; still needs `lab_password` passed explicitly -- nothing here should ever
+hardcode real lab credentials into a committed file). Step 3 is a separate shell script, not
+part of `site.yml`, since it isn't Ansible-Automation-Platform-specific -- it just patches
+whatever RHDP's own provisioning created in the `showroom-userN` namespaces.
 
 `install-aap.yml` writes the gateway route and generated admin password to
 `.generated/controller-connection.yml` (gitignored) so `configure-controller.yml` picks them
